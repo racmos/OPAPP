@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}{{ deck.name }} - Deck View{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+        <h1 style="color: var(--gold); margin-bottom: 0;">{{ deck.name }}</h1>
+        <p style="color: var(--text-muted); font-size: 0.9rem;">
+            Version {{ deck.opdck_seq }} &middot; Updated {{ deck.opdck_snapshot.strftime('%Y-%m-%d %H:%M') if deck.opdck_snapshot else '' }}
+        </p>
+    </div>
+    <div>
+        <a href="{{ url_for('deck.deck') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Decks
+        </a>
+        <button class="btn btn-danger" onclick="deleteDeck()" style="margin-left: 0.5rem;">
+            <i class="fas fa-trash"></i> Delete
+        </button>
+    </div>
+</div>
+
+<!-- Deck Metadata -->
+<div class="filter-section">
+    <div class="filter-row">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Owner</label>
+            <div style="color: var(--text);">{{ deck.opdck_user }}</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Format</label>
+            <div style="color: var(--text);">{{ deck.opdck_format }}</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Mode</label>
+            <div style="color: var(--text);">{{ deck.opdck_mode }}</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Total Cards</label>
+            <div style="color: var(--text); font-weight: bold;">{{ deck.opdck_ncards }}</div>
+        </div>
+        {% if deck.opdck_max_set %}
+        <div class="form-group" style="margin-bottom: 0;">
+            <label>Max Set</label>
+            <div style="color: var(--text);">{{ deck.opdck_max_set }}</div>
+        </div>
+        {% endif %}
+    </div>
+    {% if deck.opdck_description %}
+    <div class="form-group" style="margin-top: 1rem; margin-bottom: 0;">
+        <label>Description</label>
+        <div style="color: var(--text); font-style: italic;">{{ deck.opdck_description }}</div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Main Deck -->
+<h2 style="color: var(--gold); margin: 2rem 0 1rem;">
+    <i class="fas fa-clone"></i> Main Deck
+    {% if deck.cards_main %}({{ deck.cards_main|length }} cards){% endif %}
+</h2>
+{% if deck.cards_main %}
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Set</th>
+            <th>Card ID</th>
+            <th>Qty</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for card in deck.cards_main %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ card.set }}</td>
+            <td>{{ card.id }}</td>
+            <td><strong>{{ card.qty }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p style="color: var(--text-muted); padding: 2rem; text-align: center;">No cards in main deck.</p>
+{% endif %}
+
+<!-- Sideboard -->
+{% if deck.cards_sideboard %}
+<h2 style="color: var(--gold); margin: 2rem 0 1rem;">
+    <i class="fas fa-arrow-right"></i> Sideboard ({{ deck.cards_sideboard|length }} cards)
+</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>Set</th>
+            <th>Card ID</th>
+            <th>Qty</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for card in deck.cards_sideboard %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ card.set }}</td>
+            <td>{{ card.id }}</td>
+            <td><strong>{{ card.qty }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function deleteDeck() {
+    if (!confirm('Are you sure you want to delete "{{ deck.name }}"? This cannot be undone.')) return;
+    try {
+        const resp = await fetch('{{ url_for("deck.delete_deck") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: {{ deck.id }} })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.href = '{{ url_for("deck.deck") }}';
+        } else {
+            alert(data.message || 'Error deleting deck');
+        }
+    } catch (err) {
+        alert('Network error');
+    }
+}
+</script>
+{% endblock %}

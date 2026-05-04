@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+.eggs/
+dist/
+build/
+*.log
+.env
+.DS_Store
+*.sqlite
+*.db
+
+# Downloaded card images (generated at runtime by scraper)
+app/static/images/cards/**/
+!app/static/images/cards/.gitkeep
+.coverage

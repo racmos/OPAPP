@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Sets - OP TCG Manager{% endblock %}
+
+{% block content %}
+<h1 style="color: var(--gold); margin-bottom: 1.5rem;">Card Sets</h1>
+
+<!-- Search bar -->
+<div class="filter-section">
+    <form method="GET" action="{{ url_for('sets.sets') }}" class="filter-row">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="search_id">Set ID</label>
+            <input type="text" id="search_id" name="search_id"
+                   value="{{ request.args.get('search_id', '') }}"
+                   placeholder="e.g. OP01">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="search_name">Set Name</label>
+            <input type="text" id="search_name" name="search_name"
+                   value="{{ request.args.get('search_name', '') }}"
+                   placeholder="e.g. Romance Dawn">
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+            <button type="submit" class="btn btn-primary">Search</button>
+            <a href="{{ url_for('sets.sets') }}" class="btn btn-secondary" style="margin-left: 0.5rem;">Clear</a>
+        </div>
+    </form>
+</div>
+
+<!-- Add Set button -->
+<div style="margin-bottom: 1rem; text-align: right;">
+    <button class="btn btn-primary" onclick="openAddModal()">
+        <i class="fas fa-plus"></i> Add Set
+    </button>
+</div>
+
+<!-- Sets Table -->
+<table>
+    <thead>
+        <tr>
+            <th>Set ID</th>
+            <th>Name</th>
+            <th>Card Count</th>
+            <th>Release Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if sets %}
+        {% for s in sets %}
+        <tr>
+            <td><strong>{{ s.opset_id }}</strong></td>
+            <td>{{ s.opset_name }}</td>
+            <td>{{ s.opset_ncard or '-' }}</td>
+            <td>{{ s.opset_outdat or '-' }}</td>
+            <td>
+                <button class="btn btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.85rem;"
+                        onclick="openEditModal('{{ s.opset_id }}', '{{ s.opset_name }}', {{ s.opset_ncard or 'null' }}, '{{ s.opset_outdat or '' }}')">
+                    Edit
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                No sets found. Add one to get started!
+            </td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>
+
+<!-- Add/Edit Modal -->
+<div class="modal" id="setModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="modalTitle">Add Set</h2>
+            <span class="close" onclick="closeSetModal()">&times;</span>
+        </div>
+        <form id="setForm" onsubmit="saveSet(event)">
+            <input type="hidden" id="modalMode" value="add">
+            <input type="hidden" id="originalId" value="">
+            <div class="form-group">
+                <label for="setId">Set ID</label>
+                <input type="text" id="setId" required minlength="1" maxlength="32"
+                       placeholder="e.g. OP01" oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="form-group">
+                <label for="setName">Set Name</label>
+                <input type="text" id="setName" required maxlength="255"
+                       placeholder="e.g. Romance Dawn">
+            </div>
+            <div class="form-group">
+                <label for="setNcard">Card Count</label>
+                <input type="number" id="setNcard" min="0" placeholder="Number of cards in set">
+            </div>
+            <div class="form-group">
+                <label for="setOutdat">Release Date</label>
+                <input type="date" id="setOutdat">
+            </div>
+            <div id="setFormError" class="alert alert-error" style="display: none;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeSetModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add Set';
+    document.getElementById('modalMode').value = 'add';
+    document.getElementById('setId').value = '';
+    document.getElementById('setId').disabled = false;
+    document.getElementById('setName').value = '';
+    document.getElementById('setNcard').value = '';
+    document.getElementById('setOutdat').value = '';
+    document.getElementById('setFormError').style.display = 'none';
+    document.getElementById('setModal').classList.add('active');
+}
+
+function openEditModal(id, name, ncard, outdat) {
+    document.getElementById('modalTitle').textContent = 'Edit Set';
+    document.getElementById('modalMode').value = 'edit';
+    document.getElementById('originalId').value = id;
+    document.getElementById('setId').value = id;
+    document.getElementById('setId').disabled = true;
+    document.getElementById('setName').value = name;
+    document.getElementById('setNcard').value = ncard || '';
+    document.getElementById('setOutdat').value = outdat;
+    document.getElementById('setFormError').style.display = 'none';
+    document.getElementById('setModal').classList.add('active');
+}
+
+function closeSetModal() {
+    document.getElementById('setModal').classList.remove('active');
+}
+
+async function saveSet(event) {
+    event.preventDefault();
+    const mode = document.getElementById('modalMode').value;
+    const errorEl = document.getElementById('setFormError');
+
+    const body = {
+        opset_name: document.getElementById('setName').value.trim(),
+    };
+    const ncard = document.getElementById('setNcard').value;
+    if (ncard) body.opset_ncard = parseInt(ncard);
+    const outdat = document.getElementById('setOutdat').value;
+    if (outdat) body.opset_outdat = outdat;
+
+    let url = '{{ url_for("sets.add_set") }}';
+    if (mode === 'edit') {
+        url = '{{ url_for("sets.update_set", set_id="__ID__") }}'.replace('__ID__', document.getElementById('originalId').value);
+    } else {
+        body.opset_id = document.getElementById('setId').value.trim();
+    }
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            errorEl.textContent = data.message || 'Error saving set';
+            errorEl.style.display = 'block';
+        }
+    } catch (err) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.style.display = 'block';
+    }
+}
+
+// Close modal on outside click
+document.getElementById('setModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSetModal();
+});
+</script>
+{% endblock %}

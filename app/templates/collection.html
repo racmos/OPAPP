@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Collection - OP TCG Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+.color-dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 2px;
+    vertical-align: middle;
+}
+.color-dot-Red { background-color: #c0392b; }
+.color-dot-Green { background-color: #27ae60; }
+.color-dot-Blue { background-color: #2980b9; }
+.color-dot-Purple { background-color: #8e44ad; }
+.color-dot-Black { background-color: #2c3e50; }
+.color-dot-Yellow { background-color: #f39c12; }
+
+.quantity-input {
+    width: 60px !important;
+    text-align: center;
+}
+.inline-edit select, .inline-edit input {
+    padding: 0.3rem;
+    font-size: 0.85rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="color: var(--gold); margin-bottom: 1.5rem;">My Collection</h1>
+
+<!-- Filters -->
+<div class="filter-section">
+    <form method="GET" action="{{ url_for('collection.collection') }}" class="filter-row">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="search_set">Set</label>
+            <select id="search_set" name="search_set">
+                <option value="">All Sets</option>
+                {% for s in sets %}
+                <option value="{{ s.opset_id }}" {% if request.args.get('search_set') == s.opset_id %}selected{% endif %}>
+                    {{ s.opset_id }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="search_card_name">Card Name</label>
+            <input type="text" id="search_card_name" name="search_card_name"
+                   value="{{ request.args.get('search_card_name', '') }}" placeholder="Search...">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="search_color">Color</label>
+            <select id="search_color" name="search_color">
+                <option value="">All Colors</option>
+                {% for c in colors %}
+                <option value="{{ c }}" {% if request.args.get('search_color') == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('collection.collection') }}" class="btn btn-secondary">Clear</a>
+        </div>
+    </form>
+</div>
+
+<!-- Add to Collection (inline) -->
+<div class="filter-section" style="margin-bottom: 2rem;">
+    <h3 style="color: var(--gold); margin-bottom: 1rem;">Add to Collection</h3>
+    <form id="addCollectionForm" onsubmit="addToCollection(event)" class="filter-row">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_set">Set</label>
+            <select id="add_set" required>
+                <option value="">Select Set</option>
+                {% for s in sets %}
+                <option value="{{ s.opset_id }}">{{ s.opset_id }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_card_id">Card ID</label>
+            <input type="text" id="add_card_id" required placeholder="e.g. OP01-001">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_foil">Foil</label>
+            <select id="add_foil">
+                <option value="N">Normal</option>
+                <option value="S">Foil</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_quantity">Qty</label>
+            <input type="number" id="add_quantity" value="1" min="1" style="width:80px;">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_condition">Condition</label>
+            <select id="add_condition">
+                <option value="">-</option>
+                <option value="MT">Mint</option>
+                <option value="NM">Near Mint</option>
+                <option value="EX">Excellent</option>
+                <option value="GD">Good</option>
+                <option value="LP">Light Play</option>
+                <option value="PL">Played</option>
+                <option value="PO">Poor</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_language">Language</label>
+            <select id="add_language">
+                <option value="">-</option>
+                <option value="EN">English</option>
+                <option value="JP">Japanese</option>
+                <option value="ES">Spanish</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end;">
+            <button type="submit" class="btn btn-primary">Add Card</button>
+        </div>
+    </form>
+    <div id="addResult" style="margin-top: 0.5rem;"></div>
+</div>
+
+<!-- Collection Table -->
+<table>
+    <thead>
+        <tr>
+            <th>Set</th>
+            <th>Card ID</th>
+            <th>Name</th>
+            <th>Foil</th>
+            <th>Qty</th>
+            <th>Condition</th>
+            <th>Language</th>
+            <th>Selling</th>
+            <th>Price</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if collections_data %}
+        {% for entry in collections_data %}
+        {% set col = entry.collection %}
+        {% set card = entry.card %}
+        <tr id="col-row-{{ col.opcol_id }}">
+            <td>{{ col.opcol_opset_id }}</td>
+            <td>{{ col.opcol_opcar_id }}</td>
+            <td>
+                {{ card.opcar_name }}
+                {% if card.opcar_color %}
+                {% for c in card.opcar_color.split('/') %}
+                <span class="color-dot color-dot-{{ c.strip() }}"></span>
+                {% endfor %}
+                {% endif %}
+            </td>
+            <td>{{ col.opcol_foil == 'S' and 'Foil' or 'Normal' }}</td>
+            <td class="inline-edit">
+                <input type="number" class="quantity-input" value="{{ col.opcol_quantity }}" min="0"
+                       onchange="updateField({{ col.opcol_id }}, 'opcol_quantity', this.value)">
+            </td>
+            <td class="inline-edit">
+                <select onchange="updateField({{ col.opcol_id }}, 'opcol_condition', this.value)">
+                    <option value="" {% if not col.opcol_condition %}selected{% endif %}>-</option>
+                    <option value="MT" {% if col.opcol_condition == 'MT' %}selected{% endif %}>Mint</option>
+                    <option value="NM" {% if col.opcol_condition == 'NM' %}selected{% endif %}>Near Mint</option>
+                    <option value="EX" {% if col.opcol_condition == 'EX' %}selected{% endif %}>Excellent</option>
+                    <option value="GD" {% if col.opcol_condition == 'GD' %}selected{% endif %}>Good</option>
+                    <option value="LP" {% if col.opcol_condition == 'LP' %}selected{% endif %}>Light Play</option>
+                    <option value="PL" {% if col.opcol_condition == 'PL' %}selected{% endif %}>Played</option>
+                    <option value="PO" {% if col.opcol_condition == 'PO' %}selected{% endif %}>Poor</option>
+                </select>
+            </td>
+            <td class="inline-edit">
+                <select onchange="updateField({{ col.opcol_id }}, 'opcol_language', this.value)">
+                    <option value="" {% if not col.opcol_language %}selected{% endif %}>-</option>
+                    <option value="EN" {% if col.opcol_language == 'EN' %}selected{% endif %}>English</option>
+                    <option value="JP" {% if col.opcol_language == 'JP' %}selected{% endif %}>Japanese</option>
+                    <option value="ES" {% if col.opcol_language == 'ES' %}selected{% endif %}>Spanish</option>
+                </select>
+            </td>
+            <td class="inline-edit">
+                <select onchange="updateField({{ col.opcol_id }}, 'opcol_selling', this.value)">
+                    <option value="N" {% if col.opcol_selling != 'Y' %}selected{% endif %}>No</option>
+                    <option value="Y" {% if col.opcol_selling == 'Y' %}selected{% endif %}>Yes</option>
+                </select>
+            </td>
+            <td class="inline-edit">
+                <input type="number" step="0.01" min="0" style="width:80px;"
+                       value="{{ col.opcol_sell_price or '' }}"
+                       placeholder="0.00"
+                       onchange="updateField({{ col.opcol_id }}, 'opcol_sell_price', this.value)">
+            </td>
+            <td>
+                <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;"
+                        onclick="removeFromCollection({{ col.opcol_id }})" title="Remove">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr>
+            <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                Your collection is empty. Add cards using the form above!
+            </td>
+        </tr>
+        {% endif %}
+    </tbody>
+</table>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<div class="pagination" style="display:flex;justify-content:center;gap:0.5rem;margin-top:2rem;">
+    {% if pagination.has_prev %}
+    <a href="?page={{ pagination.prev_num }}&search_set={{ request.args.get('search_set', '') }}&search_card_name={{ request.args.get('search_card_name', '') }}&search_color={{ request.args.get('search_color', '') }}" class="btn btn-secondary" style="padding:0.5rem;">&laquo; Prev</a>
+    {% endif %}
+    <span class="btn" style="background:var(--accent);cursor:default;padding:0.5rem 1rem;">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}
+    <a href="?page={{ pagination.next_num }}&search_set={{ request.args.get('search_set', '') }}&search_card_name={{ request.args.get('search_card_name', '') }}&search_color={{ request.args.get('search_color', '') }}" class="btn btn-secondary" style="padding:0.5rem;">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function addToCollection(event) {
+    event.preventDefault();
+    const resultEl = document.getElementById('addResult');
+    const body = {
+        opcol_opset_id: document.getElementById('add_set').value,
+        opcol_opcar_id: document.getElementById('add_card_id').value.trim(),
+        opcol_foil: document.getElementById('add_foil').value,
+        opcol_quantity: parseInt(document.getElementById('add_quantity').value) || 1,
+        opcol_condition: document.getElementById('add_condition').value || null,
+        opcol_language: document.getElementById('add_language').value || null,
+    };
+    try {
+        const resp = await fetch('{{ url_for("collection.add_collection") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            resultEl.innerHTML = '<div class="alert alert-success">Card added! ' + (data.merged ? '(Merged with existing)' : '') + '</div>';
+            setTimeout(() => window.location.reload(), 800);
+        } else {
+            resultEl.innerHTML = '<div class="alert alert-error">' + (data.message || 'Error') + '</div>';
+        }
+    } catch (err) {
+        resultEl.innerHTML = '<div class="alert alert-error">Network error</div>';
+    }
+}
+
+async function updateField(opcolId, field, value) {
+    const body = { opcol_id: opcolId };
+    if (field === 'opcol_quantity') {
+        body.opcol_quantity = parseInt(value) || 0;
+    } else if (field === 'opcol_sell_price') {
+        body.opcol_sell_price = value === '' ? null : parseFloat(value);
+    } else {
+        body[field] = value || null;
+    }
+    try {
+        const resp = await fetch('{{ url_for("collection.update_collection") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.deleted) {
+            window.location.reload();
+        }
+    } catch (err) {
+        console.error('Update failed:', err);
+    }
+}
+
+async function removeFromCollection(opcolId) {
+    if (!confirm('Remove this card from your collection?')) return;
+    try {
+        const resp = await fetch('{{ url_for("collection.remove_collection") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ opcol_id: opcolId })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            const row = document.getElementById('col-row-' + opcolId);
+            if (row) row.remove();
+        }
+    } catch (err) {
+        console.error('Remove failed:', err);
+    }
+}
+</script>
+{% endblock %}

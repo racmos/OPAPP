@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}501 - Not Implemented{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <h1>501</h1>
+    <h2>Not Implemented</h2>
+    <p>{% if message %}{{ message }}{% else %}This feature is coming soon!{% endif %}</p>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+</div>
+{% endblock %}

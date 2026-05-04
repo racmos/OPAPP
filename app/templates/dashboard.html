@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - OP TCG Manager{% endblock %}
+
+{% block content %}
+<h1 style="text-align: center; color: var(--accent); margin-bottom: 3rem;">
+    Welcome to One Piece TCG Manager
+</h1>
+
+<div class="dashboard-grid">
+    <a href="{{ url_for('sets.sets') }}" class="dashboard-card">
+        <i class="fas fa-layer-group fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Sets</h3>
+        <p>Browse card sets and expansions</p>
+    </a>
+
+    <a href="{{ url_for('cards.cards') }}" class="dashboard-card">
+        <i class="fas fa-address-card fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Cards</h3>
+        <p>View and search all cards</p>
+    </a>
+
+    <a href="{{ url_for('collection.collection') }}" class="dashboard-card">
+        <i class="fas fa-folder-open fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Collection</h3>
+        <p>Track your card collection</p>
+    </a>
+
+    <a href="{{ url_for('deck.deck') }}" class="dashboard-card">
+        <i class="fas fa-clone fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Decks</h3>
+        <p>Build and manage decks</p>
+    </a>
+
+    <a href="{{ url_for('price.price') }}" class="dashboard-card">
+        <i class="fas fa-tag fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Prices</h3>
+        <p>Check card prices and market data</p>
+    </a>
+
+    <a href="{{ url_for('profile.profile') }}" class="dashboard-card">
+        <i class="fas fa-user-circle fa-3x" style="color: var(--accent); margin-bottom: 1rem;"></i>
+        <h3>Profile</h3>
+        <p>Manage your account</p>
+    </a>
+</div>
+{% endblock %}

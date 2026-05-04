@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}401 - Unauthorized{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <h1>401</h1>
+    <h2>Unauthorized</h2>
+    <p>You must log in to access this page.</p>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Login</a>
+</div>
+{% endblock %}

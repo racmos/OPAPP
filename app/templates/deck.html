@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Decks - OP TCG Manager{% endblock %}
+
+{% block content %}
+<h1 style="color: var(--gold); margin-bottom: 1.5rem;">My Decks</h1>
+
+<!-- Filters -->
+<div class="filter-section">
+    <form method="GET" action="{{ url_for('deck.deck') }}" class="filter-row">
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter_name">Deck Name</label>
+            <input type="text" id="filter_name" name="filter_name"
+                   value="{{ request.args.get('filter_name', '') }}" placeholder="Search...">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter_format">Format</label>
+            <select id="filter_format" name="filter_format">
+                <option value="">All Formats</option>
+                {% for f in formats %}
+                <option value="{{ f }}" {% if request.args.get('filter_format') == f %}selected{% endif %}>{{ f }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter_mode">Mode</label>
+            <select id="filter_mode" name="filter_mode">
+                <option value="">All Modes</option>
+                {% for m in modes %}
+                <option value="{{ m }}" {% if request.args.get('filter_mode') == m %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end; gap: 0.5rem;">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('deck.deck') }}" class="btn btn-secondary">Clear</a>
+        </div>
+    </form>
+</div>
+
+<!-- Create Deck button -->
+<div style="margin-bottom: 1rem; text-align: right;">
+    <button class="btn btn-primary" onclick="openCreateModal()">
+        <i class="fas fa-plus"></i> Create Deck
+    </button>
+</div>
+
+<!-- Deck Cards -->
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+    {% if decks %}
+    {% for d in decks %}
+    <a href="{{ url_for('deck.view_deck', name=d.name) }}" style="text-decoration: none;">
+        <div class="card" style="cursor: pointer; padding: 1.5rem;">
+            <h3 style="color: var(--gold); margin-bottom: 0.5rem;">{{ d.name }}</h3>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; color: var(--text-muted); font-size: 0.85rem;">
+                <span><i class="fas fa-gamepad"></i> {{ d.format }}</span>
+                <span><i class="fas fa-users"></i> {{ d.mode }}</span>
+                <span><i class="fas fa-layer-group"></i> {{ d.opdck_ncards }} cards</span>
+            </div>
+            <div style="margin-top: 0.75rem; color: var(--text-muted); font-size: 0.8rem;">
+                <i class="fas fa-clock"></i> v{{ d.opdck_seq }} &mdash; {{ d.opdck_snapshot.strftime('%Y-%m-%d %H:%M') if d.opdck_snapshot else '' }}
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="card" style="text-align: center; grid-column: 1 / -1; padding: 3rem; color: var(--text-muted);">
+        <p>No decks yet. Create your first deck!</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Create Deck Modal -->
+<div class="modal" id="createDeckModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create Deck</h2>
+            <span class="close" onclick="closeCreateModal()">&times;</span>
+        </div>
+        <form id="createDeckForm" onsubmit="saveDeck(event)">
+            <div class="form-group">
+                <label for="deckName">Deck Name</label>
+                <input type="text" id="deckName" required maxlength="255" placeholder="My Awesome Deck">
+            </div>
+            <div class="form-group">
+                <label for="deckDescription">Description</label>
+                <textarea id="deckDescription" rows="2" placeholder="Optional description..."></textarea>
+            </div>
+            <div class="filter-row">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="deckFormat">Format</label>
+                    <select id="deckFormat">
+                        <option value="Standard">Standard</option>
+                        <option value="Limited">Limited</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="deckMode">Mode</label>
+                    <select id="deckMode">
+                        <option value="1v1">1v1</option>
+                        <option value="2v2">2v2</option>
+                    </select>
+                </div>
+            </div>
+            <div id="deckFormError" class="alert alert-error" style="display: none;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Deck</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openCreateModal() {
+    document.getElementById('deckFormError').style.display = 'none';
+    document.getElementById('createDeckModal').classList.add('active');
+}
+
+function closeCreateModal() {
+    document.getElementById('createDeckModal').classList.remove('active');
+}
+
+async function saveDeck(event) {
+    event.preventDefault();
+    const errorEl = document.getElementById('deckFormError');
+    const body = {
+        opdck_name: document.getElementById('deckName').value.trim(),
+        opdck_description: document.getElementById('deckDescription').value.trim() || null,
+        opdck_format: document.getElementById('deckFormat').value,
+        opdck_mode: document.getElementById('deckMode').value,
+    };
+    try {
+        const resp = await fetch('{{ url_for("deck.save_deck") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            errorEl.textContent = data.message || 'Error saving deck';
+            errorEl.style.display = 'block';
+        }
+    } catch (err) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.style.display = 'block';
+    }
+}
+
+document.getElementById('createDeckModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCreateModal();
+});
+</script>
+{% endblock %}

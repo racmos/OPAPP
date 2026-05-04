@@ -1,0 +1,1354 @@
+{% extends "base.html" %}
+
+{% block title %}Prices - One Piece TCG Manager{% endblock %}
+
+{% block content %}
+<h1>Price Management</h1>
+
+<div class="card" style="margin-top: 2rem;">
+    <h2>Extraer Cartas One Piece</h2>
+    <p>Descarga cartas e im&aacute;genes desde el sitio oficial de One Piece Card Game.</p>
+
+    <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+        <button type="button" id="refreshSetsBtn" class="btn btn-primary" onclick="refreshOPSets()" style="background-color: #00b2cf;">
+            Refrescar Sets
+        </button>
+        <button type="button" id="extractCardsBtn" class="btn btn-primary" onclick="extractOPCards()" style="background-color: #ef7d21;" disabled>
+            Extraer cartas One Piece
+        </button>
+    </div>
+
+    <div id="opSetsContainer" style="display: none; margin: 1rem 0;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; cursor: pointer;">
+            <input type="checkbox" id="opSelectAll" onclick="toggleAllOPSets()" style="width: auto; margin: 0;">
+            <strong>Seleccionar todos</strong>
+        </label>
+        <div id="opSetsList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;">
+        </div>
+    </div>
+
+    <div id="opResultSection" style="display: none; margin-top: 1rem;">
+        <div id="opStatusMessage"></div>
+        <table style="margin-top: 0.5rem; width: 100%;">
+            <thead>
+                <tr>
+                    <th>Step</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody id="opStatusBody">
+            </tbody>
+        </table>
+        <div id="opStatsSection" style="display: none; margin-top: 1rem;">
+            <h3 style="font-size: 1rem;">Estad&iacute;sticas</h3>
+            <div id="opStatsContent" style="font-family: monospace; font-size: 0.9rem; background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: 6px;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h2>Cardmarket Data Tables</h2>
+    <p>Download and load the latest product catalog and price guide from Cardmarket (game 18).</p>
+    <p style="font-size: 0.9rem; color: #95a5a6;">Files: price_guide_18.json, products_singles_18.json, products_nonsingles_18.json</p>
+    <button type="button" id="cardmarketLoadBtn" class="btn btn-primary" onclick="loadCardmarketData()" style="background-color: #ef7d21;">
+        Cardmarket Data Tables
+    </button>
+    <button type="button" id="reviewLoadBtn" class="btn btn-primary" onclick="openReviewModal()" style="background-color: #95a5a6; margin-left: 1rem; display: none;">
+        <i class="fas fa-exclamation-triangle"></i> Revisar carga
+    </button>
+    <button type="button" id="viewIgnoredBtn" class="btn btn-primary" onclick="openIgnoredModal()" style="background-color: #6c3483; margin-left: 1rem;">
+        <i class="fas fa-eye-slash"></i> Ver ignorados
+    </button>
+    <button type="button" id="newExpansionBtn" class="btn btn-primary" onclick="openExpansionModal()" style="background-color: #2980b9; margin-left: 1rem; display: none;">
+        <i class="fas fa-plus-circle"></i> Nueva expansión
+    </button>
+    <button type="button" id="autoMatchBtn" class="btn btn-primary" onclick="runAutoMatch()" style="background-color: #16a085; margin-left: 1rem;">
+        <i class="fas fa-wand-magic-sparkles"></i> Auto-match
+    </button>
+    <button type="button" class="btn btn-primary" onclick="openMappingsModal()" style="background-color: #8e44ad; margin-left: 1rem;">
+        <i class="fas fa-list"></i> Ver / borrar mappings
+    </button>
+</div>
+
+<!-- Mappings Browser Modal -->
+<div id="mappingsModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-content--wide">
+        <div class="modal-header">
+            <h2><i class="fas fa-list"></i> Mappings Cardmarket</h2>
+            <button class="modal-close" onclick="closeMappingsModal()">&times;</button>
+        </div>
+        <div class="modal-body modal-body--scroll">
+            <div class="mappings-toolbar">
+                <input type="text" id="mapFilterProduct" placeholder="Producto / idProduct..." class="entry-form-input" oninput="loadMappings()">
+                <input type="text" id="mapFilterCard" placeholder="Carta / card_id (solo mapeadas)" class="entry-form-input" oninput="loadMappings()">
+                <input type="text" id="mapFilterSet" placeholder="Set ID (solo mapeadas)" class="entry-form-input" oninput="loadMappings()">
+                <select id="mapFilterOnly" class="entry-form-input" onchange="loadMappings()">
+                    <option value="all">Todos</option>
+                    <option value="mapped">Solo mapeados</option>
+                    <option value="unmapped">Solo sin mapear</option>
+                </select>
+                <label class="mappings-checkbox">
+                    <input type="checkbox" id="mapIncludeNonsingles" onchange="loadMappings()">
+                    Incluir nonsingles
+                </label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="resetMappingFilters()">
+                    <i class="fas fa-rotate-left"></i> Limpiar
+                </button>
+            </div>
+            <div id="mappingsStats" class="mappings-stats"></div>
+            <div class="mappings-table-wrap">
+                <table class="review-table mappings-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">idProduct</th>
+                            <th>Nombre Producto</th>
+                            <th style="width: 80px; text-align: right;">Low &euro;</th>
+                            <th style="width: 70px;">Set</th>
+                            <th style="width: 70px;">ID Card</th>
+                            <th>Card Name</th>
+                            <th style="width: 50px;">Foil</th>
+                            <th style="width: 80px;">Match</th>
+                            <th style="width: 50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="mappingsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Conflict Modal -->
+<div id="conflictModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header" style="border-bottom: 2px solid #e74c3c;">
+            <h2 style="color: #e74c3c;"><i class="fas fa-triangle-exclamation"></i> Mapeo en conflicto</h2>
+            <button class="modal-close" onclick="closeConflictModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="conflictBody" style="margin-bottom: 1rem;"></div>
+            <p>Quieres <strong>quitar el mapeo existente</strong> y dejar la carta libre para mapear este nuevo producto?</p>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeConflictModal()">No, cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="resolveConflict()">
+                    <i class="fas fa-trash"></i> Si, quitar el mapeo existente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-match Result Modal -->
+<div id="autoMatchModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; display: flex; flex-direction: column; max-height: 90vh;">
+        <div class="modal-header">
+            <h2><i class="fas fa-wand-magic-sparkles"></i> Auto-match resultado</h2>
+            <button class="modal-close" onclick="closeAutoMatchModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="flex: 1 1 auto; overflow-y: auto; min-height: 0;">
+            <div id="autoMatchSummary" style="margin-bottom: 1rem;"></div>
+            <table class="review-table" style="width: 100%; font-size: 0.85rem;">
+                <thead>
+                    <tr>
+                        <th style="width: 32px; text-align: center;">
+                            <input type="checkbox" id="autoMatchSelectAll" checked title="Seleccionar todo" onchange="toggleAllAutoMatch(this.checked)">
+                        </th>
+                        <th>idProduct</th>
+                        <th>Producto</th>
+                        <th>Precio</th>
+                        <th>Carta</th>
+                        <th>Rareza</th>
+                        <th>Foil</th>
+                    </tr>
+                </thead>
+                <tbody id="autoMatchSamples"></tbody>
+            </table>
+            <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;" id="autoMatchActions"></div>
+        </div>
+    </div>
+</div>
+
+<div id="cardmarketResultSection" style="display: none; margin-top: 2rem;">
+    <div class="card">
+        <h2>Cardmarket Load Result</h2>
+        <div id="cardmarketStatusMessage"></div>
+        <table id="cardmarketStatusTable" style="margin-top: 1rem;">
+            <thead>
+                <tr>
+                    <th>Step</th>
+                    <th>Status</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody id="cardmarketStatusBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Review Modal -->
+<div id="reviewModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-exclamation-triangle" style="color: #ef7d21;"></i> Revisar carga - Productos sin mapear</h2>
+            <button class="modal-close" onclick="closeReviewModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <table class="review-table" id="reviewTable">
+                <thead><tr id="reviewTableHead"></tr></thead>
+                <tbody id="unmatchedList"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Expansion Mapping Modal -->
+<div id="expansionModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h2><i class="fas fa-plus-circle" style="color: #2980b9;"></i> Nueva expansion - Mapear expansiones Cardmarket</h2>
+            <button class="modal-close" onclick="closeExpansionModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="expansionDownloadLinks" style="background: rgba(0,0,0,0.25); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.85rem;">
+                <strong>Ficheros fuente:</strong>
+                <ul id="expansionDownloadList" style="margin: 0.25rem 0 0 1.25rem;"></ul>
+            </div>
+            <p style="font-size: 0.9rem; color: #bdc3c7;">
+                Indica para cada expansion el <code>rbset_id</code> interno. Si el set no existe, anade tambien el <code>rbset_name</code> y se creara.
+            </p>
+            <table class="review-table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th>ID Expansion</th>
+                        <th>Nombre Cardmarket</th>
+                        <th>Productos</th>
+                        <th>Set ID interno</th>
+                        <th>Nombre del set (si nuevo)</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="expansionList"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Ignored Products Modal -->
+<div id="ignoredModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 700px; height: auto; max-height: 80vh;">
+        <div class="modal-header">
+            <h2><i class="fas fa-eye-slash" style="color: #8e44ad;"></i> Productos ignorados</h2>
+            <button class="modal-close" onclick="closeIgnoredModal()">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: 1rem !important;">
+            <table class="review-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="width: 100px;">idProduct</th>
+                        <th>Nombre</th>
+                        <th style="width: 90px; text-align: center;">Precio</th>
+                        <th style="width: 120px;"></th>
+                    </tr>
+                </thead>
+                <tbody id="ignoredListBody">
+                    <tr><td colspan="4">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Entry Modal -->
+<div id="addEntryModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 760px;">
+        <div class="modal-header">
+            <h2 id="addEntryTitle"><i class="fas fa-plus"></i> Anadir carta</h2>
+            <button class="modal-close" onclick="closeAddEntryModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="cardFormBlock">
+                <div class="entry-form-grid entry-form-grid--3">
+                    <div class="entry-form-field"><label class="entry-form-label">Set ID *</label><input type="text" id="cf_rbcar_rbset_id" class="entry-form-input" placeholder="OP-01, EB-04..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Card ID *</label><input type="text" id="cf_rbcar_id" class="entry-form-input" placeholder="001, 50a..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Nombre *</label><input type="text" id="cf_rbcar_name" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Categoria</label><input type="text" id="cf_opcar_category" class="entry-form-input" placeholder="LEADER, CHARACTER..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Color</label><input type="text" id="cf_opcar_color" class="entry-form-input" placeholder="Red, Blue..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Rareza</label><input type="text" id="cf_opcar_rarity" class="entry-form-input" placeholder="L, SR, R, C, UC..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Cost</label><input type="number" id="cf_opcar_cost" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Life</label><input type="number" id="cf_opcar_life" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Power</label><input type="number" id="cf_opcar_power" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Counter</label><input type="number" id="cf_opcar_counter" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Attribute</label><input type="text" id="cf_opcar_attribute" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Type</label><input type="text" id="cf_opcar_type" class="entry-form-input"></div>
+                </div>
+                <div class="entry-form-field" style="margin-top: 0.75rem;">
+                    <label class="entry-form-label">Effect</label>
+                    <textarea id="cf_opcar_effect" rows="2" class="entry-form-input"></textarea>
+                </div>
+                <div class="entry-form-grid entry-form-grid--2" style="margin-top: 0.75rem;">
+                    <div class="entry-form-field"><label class="entry-form-label">Image URL</label><input type="text" id="cf_image_url" class="entry-form-input"></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Image (filename)</label><input type="text" id="cf_image" class="entry-form-input"></div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAddEntryModal()">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveEntry()">
+                    <i class="fas fa-save"></i> Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // === One Piece Scraper Functions ===
+
+    async function refreshOPSets() {
+        const btn = document.getElementById('refreshSetsBtn');
+        btn.disabled = true;
+        btn.textContent = 'Cargando sets...';
+
+        try {
+            const response = await fetch('/onepiecetcg/price/refresh-op-sets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            const result = await response.json();
+
+            if (result.success && result.sets.length > 0) {
+                const container = document.getElementById('opSetsList');
+                container.innerHTML = '';
+
+                result.sets.forEach(s => {
+                    const label = document.createElement('label');
+                    label.className = 'set-checkbox';
+                    label.innerHTML = `
+                        <input type="checkbox" name="op_sets" value="${s.id}" class="op-set-check" checked>
+                        ${s.label || s.id} (${s.id})
+                    `;
+                    container.appendChild(label);
+                });
+
+                document.getElementById('opSetsContainer').style.display = 'block';
+                document.getElementById('extractCardsBtn').disabled = false;
+                document.getElementById('opSelectAll').checked = true;
+            } else {
+                alert('No se encontraron sets: ' + (result.message || 'respuesta vacia'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Refrescar Sets';
+        }
+    }
+
+    function toggleAllOPSets() {
+        const checked = document.getElementById('opSelectAll').checked;
+        document.querySelectorAll('.op-set-check').forEach(cb => cb.checked = checked);
+    }
+
+    async function extractOPCards() {
+        const btn = document.getElementById('extractCardsBtn');
+        btn.disabled = true;
+        btn.textContent = 'Extrayendo...';
+
+        const selectedSets = [];
+        document.querySelectorAll('.op-set-check:checked').forEach(cb => {
+            selectedSets.push(cb.value);
+        });
+
+        const resultSection = document.getElementById('opResultSection');
+        resultSection.style.display = 'block';
+        document.getElementById('opStatusBody').innerHTML = '';
+        document.getElementById('opStatsSection').style.display = 'none';
+        document.getElementById('opStatusMessage').innerHTML = `
+            <div class="alert alert-warning">
+                <strong>Procesando...</strong> Descargando cartas e imagenes de One Piece. Puede tardar unos minutos.
+            </div>
+        `;
+
+        try {
+            const response = await fetch('/onepiecetcg/price/extract-op-cards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sets: selectedSets })
+            });
+
+            const result = await response.json();
+            const tbody = document.getElementById('opStatusBody');
+
+            if (result.steps) {
+                result.steps.forEach(step => {
+                    const row = tbody.insertRow();
+                    const statusClass = step.status.toLowerCase();
+                    row.innerHTML = `
+                        <td>${step.step}</td>
+                        <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
+                        <td>${step.message}</td>
+                    `;
+                });
+            }
+
+            if (result.stats) {
+                const s = result.stats;
+                document.getElementById('opStatsSection').style.display = 'block';
+                document.getElementById('opStatsContent').innerHTML = `
+                    Cartas extraidas: <strong>${s.total_scraped || 0}</strong><br>
+                    Filtradas: ${s.filtered || 0}<br>
+                    Insertadas: <strong>${s.inserted || 0}</strong><br>
+                    Actualizadas: ${s.updated || 0}<br>
+                    Sin cambios: ${s.skipped || 0}<br>
+                    Imagenes nuevas: <strong>${s.images_downloaded || 0}</strong><br>
+                    Imagenes existentes: ${s.images_existed || 0}<br>
+                    Imagenes fallidas: ${s.images_failed || 0}
+                `;
+            }
+
+            if (result.success) {
+                document.getElementById('opStatusMessage').innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>Extraccion completada!</strong>
+                    </div>
+                `;
+            } else {
+                document.getElementById('opStatusMessage').innerHTML = `
+                    <div class="alert alert-error">
+                        <strong>Error en extraccion</strong>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            document.getElementById('opStatusMessage').innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Extraer cartas One Piece';
+        }
+    }
+
+    // === Cardmarket Functions ===
+
+    async function loadCardmarketData() {
+        const btn = document.getElementById('cardmarketLoadBtn');
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+
+        document.getElementById('cardmarketResultSection').style.display = 'block';
+        document.getElementById('cardmarketStatusBody').innerHTML = '';
+        document.getElementById('cardmarketStatusMessage').innerHTML = `
+            <div class="alert alert-warning">
+                <strong>Processing...</strong> Downloading and loading Cardmarket data. Please wait.
+            </div>
+        `;
+
+        try {
+            const response = await fetch('/onepiecetcg/price/cardmarket-load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+
+            const result = await response.json();
+            const tbody = document.getElementById('cardmarketStatusBody');
+
+            if (result.steps) {
+                result.steps.forEach(step => {
+                    const row = tbody.insertRow();
+                    const statusClass = step.status.toLowerCase();
+                    row.innerHTML = `
+                        <td>${step.step}</td>
+                        <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
+                        <td>${step.message}</td>
+                    `;
+                });
+            }
+
+            if (result.success) {
+                document.getElementById('cardmarketStatusMessage').innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>Cardmarket data loaded successfully!</strong><br>
+                        Date: ${result.date}
+                    </div>
+                `;
+            } else {
+                let errorHtml = '';
+                if (result.errors && result.errors.length > 0) {
+                    errorHtml = '<ul>' + result.errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+                }
+                document.getElementById('cardmarketStatusMessage').innerHTML = `
+                    <div class="alert alert-error">
+                        <strong>Cardmarket load failed!</strong>
+                        ${errorHtml}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            document.getElementById('cardmarketStatusMessage').innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Cardmarket Data Tables';
+            checkUnmatched();
+            checkUnmappedExpansions();
+        }
+    }
+
+    // === Review Modal ===
+
+    function checkUnmatched() {
+        fetch('/onepiecetcg/price/cardmarket-unmatched')
+            .then(r => r.json())
+            .then(data => {
+                const btn = document.getElementById('reviewLoadBtn');
+                if (data.count > 0) {
+                    btn.style.display = 'inline-block';
+                    btn.style.backgroundColor = '#e74c3c';
+                    btn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Revisar carga (${data.count})`;
+                } else {
+                    btn.style.display = 'none';
+                }
+            })
+            .catch(() => {});
+    }
+
+    function openReviewModal() {
+        document.getElementById('reviewModal').style.display = 'flex';
+        loadUnmatchedProducts();
+    }
+
+    function closeReviewModal() {
+        document.getElementById('reviewModal').style.display = 'none';
+    }
+
+    function loadUnmatchedProducts() {
+        const container = document.getElementById('unmatchedList');
+        container.innerHTML = '<tr><td colspan="7">Cargando productos sin mapear...</td></tr>';
+
+        fetch('/onepiecetcg/price/cardmarket-unmatched')
+            .then(r => r.json())
+            .then(data => {
+                if (data.unmatched.length === 0) {
+                    container.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #2ecc71;">Todos los productos estan mapeados correctamente.</td></tr>';
+                    document.getElementById('reviewLoadBtn').style.display = 'none';
+                    return;
+                }
+
+                const headerRow = document.getElementById('reviewTableHead');
+                headerRow.innerHTML = '<th>ID Product</th><th>Nombre Producto</th><th style="text-align: center;">Precio Bajo</th><th>Set</th><th>ID Card</th><th>Card Name</th><th></th>';
+
+                let html = '';
+                data.unmatched.forEach(p => {
+                    const lowPrice = p.low_price != null ? `&euro;${p.low_price.toFixed(2)}` : '&mdash;';
+                    const escapedName = escapeHtml(p.name);
+                    html += `<tr id="row-${p.id_product}">
+                        <td>${p.id_product}</td>
+                        <td>${escapedName}</td>
+                        <td style="text-align: center; font-family: monospace;">${lowPrice}</td>
+                        <td><input type="text" class="map-input" id="set-${p.id_product}" placeholder="Set ID" style="width: 80px;"></td>
+                        <td><input type="text" class="map-input" id="card-${p.id_product}" placeholder="Card ID" style="width: 80px;"></td>
+                        <td><input type="text" class="map-input map-search" id="search-${p.id_product}"
+                            placeholder="Buscar por nombre (min 3 chars)" style="width: 200px;"
+                            oninput="searchCards(this, ${p.id_product})"></td>
+                        <td style="white-space: nowrap;">
+                            <button class="btn-map" onclick="saveMapping(${p.id_product})" title="Guardar mapeo">
+                                <i class="fas fa-check"></i>
+                            </button>
+                            <button class="btn-map" onclick="openAddEntryFor(${p.id_product})" title="Anadir/editar carta" style="background-color: #2980b9; margin-left: 4px;">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="btn-map" onclick="ignoreProduct(${p.id_product})" title="Ignorar este producto" style="background-color: #8e44ad; margin-left: 4px;">
+                                <i class="fas fa-eye-slash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="results-${p.id_product}" style="display: none;">
+                        <td colspan="7">
+                            <div class="search-results" id="searchResults-${p.id_product}"></div>
+                        </td>
+                    </tr>`;
+                });
+
+                container.innerHTML = html;
+            })
+            .catch(err => {
+                container.innerHTML = `<tr><td colspan="7" class="alert alert-error">Error: ${err.message}</td></tr>`;
+            });
+    }
+
+    function searchCards(input, idProduct) {
+        const q = input.value.trim();
+        const resultsRow = document.getElementById(`results-${idProduct}`);
+        const resultsDiv = document.getElementById(`searchResults-${idProduct}`);
+
+        if (q.length < 3) {
+            resultsRow.style.display = 'none';
+            resultsDiv.innerHTML = '';
+            return;
+        }
+
+        fetch(`/onepiecetcg/price/cardmarket-search-cards?q=${encodeURIComponent(q)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.cards.length === 0) {
+                    resultsDiv.innerHTML = '<span style="color: #95a5a6;">No se encontraron cartas</span>';
+                    resultsRow.style.display = 'table-row';
+                    return;
+                }
+
+                let html = '';
+                data.cards.forEach(c => {
+                    html += `<span class="search-result-item" onclick="selectCard(${idProduct}, '${c.rbset_id}', '${c.rbcar_id}', '${c.name.replace(/'/g, "\\'")}')">
+                        ${c.rbset_id} / ${c.rbcar_id} &mdash; ${c.name}
+                    </span>`;
+                });
+
+                resultsDiv.innerHTML = html;
+                resultsRow.style.display = 'table-row';
+            });
+    }
+
+    function selectCard(idProduct, setId, cardId, cardName) {
+        document.getElementById(`set-${idProduct}`).value = setId;
+        document.getElementById(`card-${idProduct}`).value = cardId;
+        document.getElementById(`search-${idProduct}`).value = cardName;
+        document.getElementById(`results-${idProduct}`).style.display = 'none';
+    }
+
+    let _pendingMapping = null;
+
+    function saveMapping(idProduct) {
+        const setId = document.getElementById(`set-${idProduct}`).value.trim();
+        const cardId = document.getElementById(`card-${idProduct}`).value.trim();
+
+        if (!setId || !cardId) {
+            alert('Set ID y Card ID son obligatorios');
+            return;
+        }
+
+        const payload = {
+            id_product: idProduct,
+            rbset_id: setId,
+            rbcar_id: cardId,
+        };
+
+        fetch('/onepiecetcg/price/cardmarket-map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(async r => ({ status: r.status, body: await r.json() }))
+        .then(({ status, body }) => {
+            if (status === 200 && body.success) {
+                onMappingSaved(idProduct);
+                return;
+            }
+            if (status === 409 && body.conflict_id_product) {
+                _pendingMapping = { payload, conflict_id_product: body.conflict_id_product, idProductRow: idProduct };
+                showConflictModal(body, payload);
+                return;
+            }
+            alert('Error: ' + (body.message || status));
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+
+    function onMappingSaved(idProduct) {
+        const row = document.getElementById(`row-${idProduct}`);
+        if (row) {
+            row.style.backgroundColor = 'rgba(46, 204, 113, 0.2)';
+            row.querySelectorAll('input, button').forEach(el => el.disabled = true);
+            const resultsRow = document.getElementById(`results-${idProduct}`);
+            if (resultsRow) resultsRow.style.display = 'none';
+        }
+        checkUnmatched();
+    }
+
+    // === Ignore / Ver ignorados ===
+
+    async function ignoreProduct(idProduct) {
+        const row = document.getElementById(`row-${idProduct}`);
+        if (!row) { alert('No se encontro la fila del producto.'); return; }
+        const name = row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (!name) { alert('No se pudo leer el nombre del producto.'); return; }
+        try {
+            const r = await fetch('/onepiecetcg/price/ignored/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_product: idProduct, name: name })
+            });
+            if (!r.ok) { alert('Error HTTP ' + r.status); return; }
+            const d = await r.json();
+            if (!d.success) { alert('Error: ' + (d.message || '')); return; }
+            row.remove();
+            const resultsRow = document.getElementById(`results-${idProduct}`);
+            if (resultsRow) resultsRow.remove();
+            checkUnmatched();
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function openIgnoredModal() {
+        document.getElementById('ignoredModal').style.display = 'flex';
+        loadIgnoredList();
+    }
+
+    function closeIgnoredModal() {
+        document.getElementById('ignoredModal').style.display = 'none';
+    }
+
+    async function loadIgnoredList() {
+        const tbody = document.getElementById('ignoredListBody');
+        tbody.innerHTML = '<tr><td colspan="4">Cargando...</td></tr>';
+        try {
+            const r = await fetch('/onepiecetcg/price/ignored');
+            const d = await r.json();
+            if (!d.success || !d.ignored.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#95a5a6;">No hay productos ignorados.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = d.ignored.map(item => {
+                const priceStr = item.low_price != null ? `&euro;${item.low_price.toFixed(2)}` : '&mdash;';
+                return `
+                <tr id="ignored-row-${item.id_product}">
+                    <td>${item.id_product}</td>
+                    <td>${escapeHtml(item.name)}</td>
+                    <td style="text-align:center;">${priceStr}</td>
+                    <td>
+                        <button class="btn-map" style="background-color: #2980b9;"
+                            onclick="restoreIgnored(${item.id_product}, this)"
+                            title="Restaurar">
+                            <i class="fas fa-rotate-left"></i> Restaurar
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="4">Error: ${escapeHtml(e.message)}</td></tr>`;
+        }
+    }
+
+    async function restoreIgnored(idProduct, btn) {
+        const row = btn.closest('tr');
+        const name = row && row.cells[1] ? row.cells[1].textContent.trim() : '';
+        if (!name) { alert('No se pudo leer el nombre del producto.'); return; }
+        try {
+            const r = await fetch('/onepiecetcg/price/ignored/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_product: idProduct, name: name })
+            });
+            const d = await r.json();
+            if (!d.success) { alert('Error: ' + (d.message || '')); return; }
+            if (row) row.remove();
+            checkUnmatched();
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // === Conflict modal ===
+
+    function showConflictModal(body, payload) {
+        const html = `
+            <p style="margin-top: 0;">${body.message || 'Conflicto de mapeo'}</p>
+            <table class="review-table" style="width: 100%; font-size: 0.85rem; margin-top: 0.5rem;">
+                <tr><th style="text-align: left;">Carta</th>
+                    <td><strong>${payload.rbset_id}-${payload.rbcar_id}</strong></td></tr>
+                <tr><th style="text-align: left;">idProduct nuevo</th>
+                    <td>${payload.id_product}</td></tr>
+                <tr><th style="text-align: left;">idProduct ya mapeado</th>
+                    <td><strong style="color: #e74c3c;">${body.conflict_id_product}</strong></td></tr>
+            </table>
+        `;
+        document.getElementById('conflictBody').innerHTML = html;
+        document.getElementById('conflictModal').style.display = 'flex';
+    }
+
+    function closeConflictModal() {
+        document.getElementById('conflictModal').style.display = 'none';
+        _pendingMapping = null;
+    }
+
+    async function resolveConflict() {
+        if (!_pendingMapping) { closeConflictModal(); return; }
+        const { payload, conflict_id_product, idProductRow } = _pendingMapping;
+        try {
+            const u = await fetch('/onepiecetcg/price/cardmarket-unmap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_product: conflict_id_product })
+            });
+            const ud = await u.json();
+            if (!ud.success) { alert('Error: ' + (ud.message || '')); return; }
+
+            const r = await fetch('/onepiecetcg/price/cardmarket-map', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const d = await r.json();
+            if (d.success) {
+                onMappingSaved(idProductRow);
+                closeConflictModal();
+                checkUnmatched();
+            } else {
+                alert('Error: ' + (d.message || ''));
+            }
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // === Mappings browser ===
+
+    function openMappingsModal() {
+        document.getElementById('mappingsModal').style.display = 'flex';
+        loadMappings();
+    }
+    function closeMappingsModal() {
+        document.getElementById('mappingsModal').style.display = 'none';
+    }
+
+    function resetMappingFilters() {
+        document.getElementById('mapFilterProduct').value = '';
+        document.getElementById('mapFilterCard').value = '';
+        document.getElementById('mapFilterSet').value = '';
+        document.getElementById('mapFilterOnly').value = 'all';
+        document.getElementById('mapIncludeNonsingles').checked = false;
+        loadMappings();
+    }
+
+    let _mapTimer = null;
+    async function loadMappings() {
+        clearTimeout(_mapTimer);
+        _mapTimer = setTimeout(async () => {
+            const params = new URLSearchParams({
+                q_product: document.getElementById('mapFilterProduct').value,
+                q_card: document.getElementById('mapFilterCard').value,
+                q_set: document.getElementById('mapFilterSet').value,
+                only: document.getElementById('mapFilterOnly').value,
+                include_nonsingles: document.getElementById('mapIncludeNonsingles').checked ? '1' : '0',
+            });
+            const tbody = document.getElementById('mappingsBody');
+            const stats = document.getElementById('mappingsStats');
+            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">Cargando...</td></tr>';
+            stats.innerHTML = '';
+            try {
+                const r = await fetch('/onepiecetcg/price/cardmarket-mappings?' + params);
+                const d = await r.json();
+                if (!d.success) {
+                    tbody.innerHTML = `<tr><td colspan="9">Error: ${escapeHtml(d.message || '')}</td></tr>`;
+                    return;
+                }
+                const s = d.stats || {};
+                stats.innerHTML = `
+                    <span>Snapshot: <strong>${s.snapshot_date || '&mdash;'}</strong></span>
+                    <span>Total productos: <strong>${s.total_in_snapshot ?? 0}</strong></span>
+                    <span style="color:#2ecc71;">Mapeados: <strong>${s.mapped ?? 0}</strong></span>
+                    <span style="color:#e67e22;">Sin mapear: <strong>${s.unmapped ?? 0}</strong></span>
+                    <span>&middot; Filtradas mostradas: <strong>${d.count}</strong></span>
+                `;
+                if (!d.rows.length) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding: 1rem;">Sin resultados con esos filtros</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = d.rows.map(r => {
+                    const lp = r.low_price != null ? `&euro;${r.low_price.toFixed(2)}` : '&mdash;';
+                    const matchBadge = r.mapped
+                        ? `<span style="color:#2ecc71;">${escapeHtml(r.match_type || 'manual')}</span>`
+                        : `<span style="color:#e67e22;">SIN MAPEAR</span>`;
+                    const action = r.mapped
+                        ? `<button class="btn-map" style="background:#e74c3c;" title="Quitar mapeo" onclick="unmapByIdProduct(${r.id_product})">
+                                <i class="fas fa-trash"></i>
+                           </button>`
+                        : '&mdash;';
+                    return `<tr>
+                        <td>${r.id_product}</td>
+                        <td>${escapeHtml(r.product_name || '')}</td>
+                        <td style="text-align: right; font-family: monospace;">${lp}</td>
+                        <td>${escapeHtml(r.rbset_id || '&mdash;')}</td>
+                        <td>${escapeHtml(r.rbcar_id || '&mdash;')}</td>
+                        <td>${escapeHtml(r.rbcar_name || '')}</td>
+                        <td style="text-align: center;">${escapeHtml(r.rbpcm_foil || '&mdash;')}</td>
+                        <td>${matchBadge}</td>
+                        <td>${action}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="9">Error: ${escapeHtml(e.message)}</td></tr>`;
+            }
+        }, 200);
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function unmapByIdProduct(idProduct) {
+        if (!confirm(`Quitar el mapeo del idProduct ${idProduct}?`)) return;
+        try {
+            const r = await fetch('/onepiecetcg/price/cardmarket-unmap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_product: idProduct })
+            });
+            const d = await r.json();
+            if (d.success) { loadMappings(); checkUnmatched(); }
+            else alert('Error: ' + (d.message || ''));
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    // === Expansion mapping ===
+
+    function checkUnmappedExpansions() {
+        fetch('/onepiecetcg/price/cardmarket-unmapped-expansions')
+            .then(r => r.json())
+            .then(data => {
+                const btn = document.getElementById('newExpansionBtn');
+                if (data.count > 0) {
+                    btn.style.display = 'inline-block';
+                    btn.innerHTML = `<i class="fas fa-plus-circle"></i> Nueva expansion (${data.count})`;
+                } else {
+                    btn.style.display = 'none';
+                }
+            })
+            .catch(() => {});
+    }
+
+    let _cachedSets = [];
+
+    function openExpansionModal() {
+        document.getElementById('expansionModal').style.display = 'flex';
+        fetch('/onepiecetcg/price/cardmarket-unmapped-expansions')
+            .then(r => r.json())
+            .then(data => {
+                _cachedSets = data.existing_sets || [];
+
+                const dl = document.getElementById('expansionDownloadList');
+                dl.innerHTML = '';
+                Object.entries(data.download_urls || {}).forEach(([key, url]) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<strong>${key}</strong>: <a href="${url}" target="_blank">${url}</a>`;
+                    dl.appendChild(li);
+                });
+
+                const tbody = document.getElementById('expansionList');
+                if (!data.expansions.length) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#2ecc71;">No hay expansiones pendientes de mapear.</td></tr>';
+                    return;
+                }
+
+                const datalistId = 'expDatalistSets';
+                let datalist = document.getElementById(datalistId);
+                if (!datalist) {
+                    datalist = document.createElement('datalist');
+                    datalist.id = datalistId;
+                    document.body.appendChild(datalist);
+                }
+                datalist.innerHTML = _cachedSets.map(s =>
+                    `<option value="${s.rbset_id}">${s.rbset_name}</option>`
+                ).join('');
+
+                tbody.innerHTML = data.expansions.map(e => `
+                    <tr id="exp-row-${e.rbexp_id}">
+                        <td>${e.rbexp_id}</td>
+                        <td><input type="text" id="exp-name-${e.rbexp_id}" value="${e.rbexp_name || ''}" placeholder="Nombre CM" style="width: 200px;"></td>
+                        <td style="text-align:center;">${e.products_count}</td>
+                        <td><input type="text" id="exp-set-${e.rbexp_id}" placeholder="OP-01, ST-01..." list="${datalistId}" style="width: 120px;"></td>
+                        <td><input type="text" id="exp-setname-${e.rbexp_id}" placeholder="(solo si es nuevo)" style="width: 200px;"></td>
+                        <td><button class="btn-map" onclick="saveExpansionMapping(${e.rbexp_id})"><i class="fas fa-check"></i></button></td>
+                    </tr>
+                `).join('');
+            });
+    }
+
+    function closeExpansionModal() {
+        document.getElementById('expansionModal').style.display = 'none';
+    }
+
+    function saveExpansionMapping(rbexp_id) {
+        const rbset_id = document.getElementById(`exp-set-${rbexp_id}`).value.trim();
+        const rbset_name = document.getElementById(`exp-setname-${rbexp_id}`).value.trim();
+        const rbexp_name = document.getElementById(`exp-name-${rbexp_id}`).value.trim();
+
+        if (!rbset_id) {
+            alert('rbset_id obligatorio');
+            return;
+        }
+        const existsSet = _cachedSets.some(s => s.rbset_id === rbset_id);
+        if (!existsSet && !rbset_name) {
+            if (!confirm(`El set "${rbset_id}" no existe. Crearlo ahora?`)) return;
+            alert('Rellena el nombre del nuevo set');
+            return;
+        }
+
+        fetch('/onepiecetcg/price/cardmarket-map-expansion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rbexp_id, rbset_id, rbset_name: rbset_name || null, rbexp_name: rbexp_name || null })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) return alert('Error: ' + (d.message || 'desconocido'));
+            const row = document.getElementById(`exp-row-${rbexp_id}`);
+            row.style.backgroundColor = 'rgba(46, 204, 113, 0.2)';
+            row.querySelectorAll('input, button').forEach(el => el.disabled = true);
+            checkUnmappedExpansions();
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+
+    // === Add Entry ===
+
+    let _addEntryContext = { idProduct: null };
+
+    function openAddEntryFor(idProduct) {
+        _addEntryContext = { idProduct };
+        document.getElementById('addEntryModal').style.display = 'flex';
+        document.getElementById('addEntryTitle').innerHTML = `<i class="fas fa-plus"></i> Anadir carta para ID Cardmarket ${idProduct}`;
+        // Reset form
+        ['cf_rbcar_rbset_id','cf_rbcar_id','cf_rbcar_name','cf_opcar_category','cf_opcar_color','cf_opcar_rarity','cf_opcar_cost','cf_opcar_life','cf_opcar_power','cf_opcar_counter','cf_opcar_attribute','cf_opcar_type','cf_opcar_effect','cf_image_url','cf_image'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+    }
+
+    function closeAddEntryModal() {
+        document.getElementById('addEntryModal').style.display = 'none';
+    }
+
+    async function saveEntry() {
+        const payload = {
+            rbcar_rbset_id: document.getElementById('cf_rbcar_rbset_id').value.trim(),
+            rbcar_id: document.getElementById('cf_rbcar_id').value.trim(),
+            rbcar_name: document.getElementById('cf_rbcar_name').value.trim(),
+            opcar_category: document.getElementById('cf_opcar_category').value.trim(),
+            opcar_color: document.getElementById('cf_opcar_color').value.trim(),
+            opcar_rarity: document.getElementById('cf_opcar_rarity').value.trim(),
+            opcar_cost: document.getElementById('cf_opcar_cost').value,
+            opcar_life: document.getElementById('cf_opcar_life').value,
+            opcar_power: document.getElementById('cf_opcar_power').value,
+            opcar_counter: document.getElementById('cf_opcar_counter').value,
+            opcar_attribute: document.getElementById('cf_opcar_attribute').value.trim(),
+            opcar_type: document.getElementById('cf_opcar_type').value.trim(),
+            opcar_effect: document.getElementById('cf_opcar_effect').value.trim(),
+            image_url: document.getElementById('cf_image_url').value.trim(),
+            image: document.getElementById('cf_image').value.trim(),
+        };
+        if (!payload.rbcar_rbset_id || !payload.rbcar_id || !payload.rbcar_name) {
+            alert('Set ID, Card ID y Nombre son obligatorios');
+            return;
+        }
+        const resp = await fetch('/onepiecetcg/price/add-entry', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const d = await resp.json();
+        if (!d.success) return alert('Error: ' + (d.message || 'desconocido'));
+        const idp = _addEntryContext.idProduct;
+        if (idp) {
+            const setInput = document.getElementById(`set-${idp}`);
+            const cardInput = document.getElementById(`card-${idp}`);
+            const searchInput = document.getElementById(`search-${idp}`);
+            if (setInput) setInput.value = d.rbset_id;
+            if (cardInput) cardInput.value = d.rbcar_id;
+            if (searchInput) searchInput.value = d.rbcar_name;
+        }
+        alert(d.status === 'created' ? 'Carta creada' : 'Carta actualizada');
+        closeAddEntryModal();
+    }
+
+    // === Auto-match ===
+
+    let _autoMatchSamples = [];
+
+    function toggleAllAutoMatch(checked) {
+        document.querySelectorAll('.automatch-row-cb').forEach(cb => cb.checked = checked);
+    }
+
+    async function runAutoMatch() {
+        const btn = document.getElementById('autoMatchBtn');
+        btn.disabled = true;
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calculando...';
+
+        try {
+            const resp = await fetch('/onepiecetcg/price/auto-match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dry_run: true })
+            });
+            const d = await resp.json();
+            if (!d.success) {
+                alert('Error: ' + (d.message || 'desconocido'));
+                return;
+            }
+            renderAutoMatchModal(d, false);
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = original;
+        }
+    }
+
+    function renderAutoMatchModal(d, alreadyApplied) {
+        const modal = document.getElementById('autoMatchModal');
+        const summary = document.getElementById('autoMatchSummary');
+        summary.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.75rem; text-align: center;">
+                <div><strong style="color: #2ecc71;">${d.assigned}</strong><br><small>${alreadyApplied ? 'aplicados' : 'a aplicar'}</small></div>
+                <div><strong style="color: #e67e22;">${d.unmatched}</strong><br><small>sobrantes</small></div>
+                <div><strong style="color: #95a5a6;">${d.no_candidates}</strong><br><small>sin candidato</small></div>
+                <div><strong style="color: #95a5a6;">${d.skipped}</strong><br><small>sin idMetacard</small></div>
+                <div><strong style="color: #8e44ad;">${d.ignored_count || 0}</strong><br><small>ignorados</small></div>
+                <div><strong style="color: #e74c3c;">${d.review || 0}</strong><br><small>conflicto</small></div>
+            </div>
+            ${d.message ? `<p style="margin-top: 0.75rem; color: #95a5a6;"><em>${d.message}</em></p>` : ''}
+        `;
+
+        _autoMatchSamples = d.samples || [];
+        const selectAll = document.getElementById('autoMatchSelectAll');
+        if (selectAll) selectAll.checked = true;
+
+        const tbody = document.getElementById('autoMatchSamples');
+        if (!_autoMatchSamples.length) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Sin propuestas</td></tr>';
+        } else {
+            tbody.innerHTML = _autoMatchSamples.map((s, idx) => `
+                <tr>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="automatch-row-cb" data-idx="${idx}" checked>
+                    </td>
+                    <td>${s.id_product}</td>
+                    <td>${escapeHtml(s.product_name || '')}</td>
+                    <td style="text-align: right; font-family: monospace;">&euro;${(s.price || 0).toFixed(2)}</td>
+                    <td><strong>${escapeHtml(s.rbset_id || '')}-${escapeHtml(s.rbcar_id || '')}</strong> ${escapeHtml(s.rbcar_name || '')}</td>
+                    <td>${escapeHtml(s.rbcar_rarity || '&mdash;')}</td>
+                    <td style="text-align: center;">${escapeHtml(s.rbpcm_foil || '&mdash;')}</td>
+                </tr>
+            `).join('');
+        }
+
+        const actions = document.getElementById('autoMatchActions');
+        if (alreadyApplied) {
+            actions.innerHTML = `<button type="button" class="btn btn-primary" onclick="closeAutoMatchModal()">Cerrar</button>`;
+        } else {
+            actions.innerHTML = `
+                <button type="button" class="btn btn-secondary" onclick="closeAutoMatchModal()">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="applySelectedAutoMatch()">
+                    <i class="fas fa-check"></i> Aplicar seleccionados
+                </button>
+            `;
+        }
+        modal.style.display = 'flex';
+    }
+
+    async function applySelectedAutoMatch() {
+        const checkboxes = document.querySelectorAll('.automatch-row-cb:checked');
+        if (!checkboxes.length) { alert('Selecciona al menos un mapeo'); return; }
+
+        const pairings = [];
+        checkboxes.forEach(cb => {
+            const idx = parseInt(cb.dataset.idx, 10);
+            const s = _autoMatchSamples[idx];
+            if (s) {
+                pairings.push({
+                    id_product: s.id_product,
+                    rbset_id: s.rbset_id,
+                    rbcar_id: s.rbcar_id,
+                    foil: s.rbpcm_foil || null,
+                });
+            }
+        });
+
+        const btn = document.querySelector('#autoMatchActions .btn-primary');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aplicando...'; }
+
+        try {
+            const resp = await fetch('/onepiecetcg/price/auto-match/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pairings })
+            });
+            const d = await resp.json();
+            if (!d.success) { alert('Error: ' + (d.message || 'desconocido')); return; }
+            closeAutoMatchModal();
+            alert(`Mappings aplicados: ${d.inserted} insertados, ${d.review} ya existentes (omitidos).`);
+            checkUnmatched();
+            checkUnmappedExpansions();
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Aplicar seleccionados'; }
+        }
+    }
+
+    function closeAutoMatchModal() {
+        document.getElementById('autoMatchModal').style.display = 'none';
+    }
+
+    // === Init ===
+    checkUnmatched();
+    checkUnmappedExpansions();
+</script>
+
+<style>
+    .set-checkbox {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .set-checkbox:hover { background-color: var(--bg-hover); }
+    .set-checkbox input[type="checkbox"] { margin-right: 0.5rem; width: auto; }
+
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: bold;
+    }
+    .status-success { background-color: rgba(46, 204, 113, 0.3); color: #2ecc71; }
+    .status-running { background-color: rgba(241, 196, 15, 0.3); color: #f1c40f; }
+    .status-pending { background-color: rgba(149, 165, 166, 0.3); color: #95a5a6; }
+    .status-error { background-color: rgba(231, 76, 60, 0.3); color: #e74c3c; }
+    .status-info { background-color: rgba(52, 152, 219, 0.3); color: #3498db; }
+    .status-skipped { background-color: rgba(149, 165, 166, 0.3); color: #95a5a6; }
+
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex; justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-content {
+        background-color: #013951; border: 1px solid #1a4c62; border-radius: 4px;
+        width: 99%; max-width: none; height: 96vh; overflow: hidden;
+        display: flex; flex-direction: column; padding: 0; margin: 0;
+    }
+    .modal-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 2px 4px; margin: 0; border-bottom: none; flex-shrink: 0;
+        min-height: 0; line-height: 1.2;
+    }
+    .modal-header h2 { margin: 0; padding: 0; font-size: 1rem; line-height: 1.2; }
+    .modal-close {
+        background: none; border: none; color: #95a5a6; font-size: 1.2rem;
+        cursor: pointer; padding: 0; margin: 0; line-height: 1;
+    }
+    .modal-close:hover { color: #e74c3c; }
+    .modal-body {
+        padding: 0; margin: 0; overflow-y: scroll;
+        -webkit-overflow-scrolling: touch; flex: 1; position: relative;
+    }
+
+    .review-table {
+        width: 100%; border-collapse: collapse; table-layout: fixed;
+    }
+    .review-table th:last-child, .review-table td:last-child { padding-right: 0.2rem; }
+    .review-table th, .review-table td {
+        padding: 0.25rem 0.4rem; text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .review-table thead th {
+        background-color: rgba(0, 0, 0, 0.95); font-weight: bold;
+        position: sticky; top: 0; z-index: 100;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 2px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .map-input {
+        background-color: rgba(0, 0, 0, 0.3); color: var(--text-color, #fff);
+        border: 1px solid #1a4c62; border-radius: 4px; padding: 0.3rem 0.5rem; font-size: 0.85rem;
+    }
+    .map-input:focus { outline: none; border-color: #00b2cf; }
+    .btn-map {
+        background-color: #2ecc71; color: white; border: none;
+        border-radius: 4px; padding: 0.4rem 0.8rem; cursor: pointer; font-size: 0.9rem;
+    }
+    .btn-map:hover { background-color: #27ae60; }
+    .btn-map:disabled { background-color: #95a5a6; cursor: not-allowed; }
+
+    .search-results {
+        display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem;
+    }
+    .search-result-item {
+        background-color: rgba(0, 178, 207, 0.2); border: 1px solid #00b2cf;
+        border-radius: 4px; padding: 0.3rem 0.6rem; cursor: pointer;
+        font-size: 0.8rem; transition: all 0.2s;
+    }
+    .search-result-item:hover { background-color: rgba(0, 178, 207, 0.4); }
+
+    .entry-form-section { margin-bottom: 1rem; }
+    .entry-form-grid { display: grid; gap: 0.75rem 1rem; }
+    .entry-form-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .entry-form-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    @media (max-width: 720px) { .entry-form-grid--2, .entry-form-grid--3 { grid-template-columns: 1fr; } }
+    .entry-form-field { display: flex; flex-direction: column; min-width: 0; }
+    .entry-form-label {
+        font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.85);
+        margin-bottom: 0.25rem; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .entry-form-input {
+        width: 100%; background-color: rgba(0, 178, 207, 0.18) !important;
+        border: 1px solid rgba(0, 178, 207, 0.4) !important;
+        color: #ffffff !important; border-radius: 4px; padding: 0.45rem 0.6rem;
+        font-size: 0.9rem; box-sizing: border-box; font-family: inherit;
+    }
+    .entry-form-input:focus {
+        outline: none; border-color: #00b2cf !important;
+        background-color: rgba(0, 178, 207, 0.28) !important;
+    }
+    .entry-form-input option { background-color: #1a4c62 !important; color: #fff !important; }
+    textarea.entry-form-input { resize: vertical; min-height: 56px; }
+
+    .modal-content--wide { width: min(1300px, 96vw) !important; max-width: none !important; }
+    .modal-body--scroll {
+        display: flex; flex-direction: column; padding: 1rem !important;
+        gap: 0.75rem; overflow: hidden !important;
+    }
+    .mappings-toolbar {
+        display: grid; grid-template-columns: 2fr 2fr 1fr 1.2fr auto auto;
+        gap: 0.5rem; align-items: center; flex-shrink: 0;
+    }
+    @media (max-width: 800px) { .mappings-toolbar { grid-template-columns: 1fr 1fr; } }
+    .mappings-checkbox {
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        font-size: 0.85rem; color: rgba(255, 255, 255, 0.85); white-space: nowrap;
+    }
+    .mappings-checkbox input { width: auto; }
+    .mappings-stats {
+        font-size: 0.85rem; color: #95a5a6; flex-shrink: 0;
+        padding: 0.4rem 0.6rem; background: rgba(0, 0, 0, 0.25);
+        border-radius: 4px; display: flex; gap: 1rem; flex-wrap: wrap;
+    }
+    .mappings-stats strong { color: #ffffff; }
+    .mappings-table-wrap {
+        flex: 1; min-height: 0; overflow: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 4px;
+    }
+    .mappings-table {
+        width: 100%; border-collapse: collapse; table-layout: auto;
+        font-size: 0.85rem;
+    }
+    .mappings-table thead { position: sticky; top: 0; background: #0d3344; z-index: 1; }
+    .mappings-table th, .mappings-table td {
+        padding: 0.4rem 0.5rem; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    .mappings-table td:nth-child(2), .mappings-table td:nth-child(6) {
+        white-space: normal; word-break: break-word;
+    }
+    .mappings-table tr:nth-child(even) td { background: rgba(255, 255, 255, 0.03); }
+    .mappings-table tr:hover td { background: rgba(0, 178, 207, 0.12); }
+</style>
+{% endblock %}
