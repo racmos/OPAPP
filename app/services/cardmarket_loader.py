@@ -391,13 +391,29 @@ class CardmarketLoader:
         return count
 
     def _update_product_card_map(self) -> dict:
-        """Auto-map Cardmarket products to internal opcards by name matching.
+        """Auto-map Cardmarket products to internal opcards.
+
+        Strategy (in order of priority):
+        1. Extract card ID from product name, e.g. "Roronoa Zoro (OP01-001)"
+           → card_id=OP01-001, use expansion→set mapping to find the set,
+           then look up OpCard by (opset_id, opcar_id).
+        2. Fallback: exact name match (only for single-match cases).
 
         Returns dict with counts: auto_matched, unmatched, already_mapped
         """
         from app.models.card import OpCard
 
         counts = {'auto_matched': 0, 'unmatched': 0, 'already_mapped': 0}
+
+        # Card ID pattern in product names: (OP01-001), (ST01-007), (P-001)
+        card_id_re = re.compile(r'\(([A-Za-z]+\d*-\d+)\)')
+
+        # Build expansion→set lookup
+        exp_to_set: dict[int, str] = {}
+        for exp in OpcmExpansion.query.filter(
+            OpcmExpansion.opexp_opset_id.isnot(None)
+        ).all():
+            exp_to_set[exp.opexp_id] = exp.opexp_opset_id
 
         products = OpcmProduct.query.filter_by(opprd_date=self.today).all()
         if not products:
@@ -414,22 +430,52 @@ class CardmarketLoader:
                 counts['already_mapped'] += 1
                 continue
 
-            matches = OpCard.query.filter(
-                db.func.lower(OpCard.opcar_name) == product.opprd_name.lower()
-            ).all()
+            # Strategy 1: card ID from product name + expansion→set
+            m = card_id_re.search(product.opprd_name or '')
+            if m:
+                full_card_id = m.group(1)  # e.g. OP01-001
+                opset_id = exp_to_set.get(product.opprd_id_expansion)
 
-            if len(matches) == 1:
-                db.session.add(OpcmProductCardMap(
-                    oppcm_id_product=product.opprd_id_product,
-                    oppcm_opset_id=matches[0].opcar_opset_id,
-                    oppcm_opcar_id=matches[0].opcar_id,
-                    oppcm_opcar_version=matches[0].opcar_version,
-                    oppcm_match_type='auto',
-                    oppcm_confidence=1.0,
-                ))
-                counts['auto_matched'] += 1
-            else:
-                counts['unmatched'] += 1
+                if opset_id:
+                    # Try exact match first (version p0)
+                    card = OpCard.query.filter_by(
+                        opcar_opset_id=opset_id,
+                        opcar_id=full_card_id,
+                        opcar_version='p0',
+                    ).first()
+
+                    if card:
+                        db.session.add(OpcmProductCardMap(
+                            oppcm_id_product=product.opprd_id_product,
+                            oppcm_opset_id=card.opcar_opset_id,
+                            oppcm_opcar_id=card.opcar_id,
+                            oppcm_opcar_version=card.opcar_version,
+                            oppcm_match_type='auto',
+                            oppcm_confidence=1.0,
+                        ))
+                        counts['auto_matched'] += 1
+                        continue
+
+            # Strategy 2: fallback — exact name match (strip card ID suffix)
+            clean_name = card_id_re.sub('', product.opprd_name or '').strip()
+            if clean_name:
+                matches = OpCard.query.filter(
+                    db.func.lower(OpCard.opcar_name) == clean_name.lower()
+                ).all()
+
+                if len(matches) == 1:
+                    db.session.add(OpcmProductCardMap(
+                        oppcm_id_product=product.opprd_id_product,
+                        oppcm_opset_id=matches[0].opcar_opset_id,
+                        oppcm_opcar_id=matches[0].opcar_id,
+                        oppcm_opcar_version=matches[0].opcar_version,
+                        oppcm_match_type='auto',
+                        oppcm_confidence=0.8,
+                    ))
+                    counts['auto_matched'] += 1
+                    continue
+
+            counts['unmatched'] += 1
 
         db.session.flush()
         return counts

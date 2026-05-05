@@ -679,6 +679,133 @@ class TestCardmarketLoader:
             assert exp is not None
             assert exp.opexp_opset_id == 'OP-01'
 
+    def test_product_card_map_by_card_id(self, app):
+        """_update_product_card_map maps products using card ID from name."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-01', 'Romance Dawn')
+            _seed_card(app, 'OP-01', 'OP01-001', 'Monkey D. Luffy')
+            _seed_card(app, 'OP-01', 'OP01-002', 'Roronoa Zoro')
+
+            # Create expansion mapping
+            db.session.add(OpcmExpansion(opexp_id=5229, opexp_opset_id='OP-01'))
+
+            # Create products with card IDs in names (Cardmarket format)
+            today = CardmarketLoader().today
+            db.session.add(OpcmProduct(
+                opprd_date=today, opprd_id_product=100,
+                opprd_name='Monkey D. Luffy (OP01-001)',
+                opprd_id_expansion=5229, opprd_type='single',
+            ))
+            db.session.add(OpcmProduct(
+                opprd_date=today, opprd_id_product=101,
+                opprd_name='Roronoa Zoro (OP01-002)',
+                opprd_id_expansion=5229, opprd_type='single',
+            ))
+            db.session.commit()
+
+            loader = CardmarketLoader()
+            counts = loader._update_product_card_map()
+
+            assert counts['auto_matched'] == 2
+            assert counts['unmatched'] == 0
+
+            m1 = OpcmProductCardMap.query.get(100)
+            assert m1.oppcm_opset_id == 'OP-01'
+            assert m1.oppcm_opcar_id == 'OP01-001'
+            assert m1.oppcm_match_type == 'auto'
+            assert float(m1.oppcm_confidence) == 1.0
+
+            m2 = OpcmProductCardMap.query.get(101)
+            assert m2.oppcm_opcar_id == 'OP01-002'
+
+    def test_product_card_map_no_expansion_mapping_falls_back_to_name(self, app):
+        """Without expansion mapping, falls back to name match."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-01', 'Romance Dawn')
+            # Card with unique name
+            _seed_card(app, 'OP-01', 'OP01-099', 'Unique Hero')
+
+            today = CardmarketLoader().today
+            # Product with card ID but NO expansion mapping
+            db.session.add(OpcmProduct(
+                opprd_date=today, opprd_id_product=200,
+                opprd_name='Unique Hero (OP01-099)',
+                opprd_id_expansion=9999, opprd_type='single',
+            ))
+            db.session.commit()
+
+            loader = CardmarketLoader()
+            counts = loader._update_product_card_map()
+
+            # Should match via name fallback (stripped card ID)
+            assert counts['auto_matched'] == 1
+            m = OpcmProductCardMap.query.get(200)
+            assert m.oppcm_opcar_id == 'OP01-099'
+            assert float(m.oppcm_confidence) == 0.8  # lower confidence for name match
+
+    def test_product_card_map_nonsingle_unmatched(self, app):
+        """Non-singles without card IDs stay unmatched."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            today = CardmarketLoader().today
+            db.session.add(OpcmProduct(
+                opprd_date=today, opprd_id_product=300,
+                opprd_name='Booster Box',
+                opprd_id_expansion=5229, opprd_type='nonsingle',
+            ))
+            db.session.commit()
+
+            loader = CardmarketLoader()
+            counts = loader._update_product_card_map()
+
+            assert counts['unmatched'] == 1
+            assert counts['auto_matched'] == 0
+
+    def test_full_run_maps_products_to_cards(self, app):
+        """Full loader run auto-maps products to cards via expansion+cardID."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-01', 'Romance Dawn')
+            _seed_card(app, 'OP-01', 'OP01-001', 'Monkey D. Luffy')
+
+            with patch('app.services.cardmarket_loader.requests.get') as mock_get:
+                def mock_get_side_effect(url, timeout=30):
+                    mock_resp = MagicMock()
+                    mock_resp.raise_for_status = MagicMock()
+                    if 'price_guide' in url:
+                        mock_resp.json.return_value = PRICE_GUIDE_JSON
+                    elif 'singles' in url:
+                        mock_resp.json.return_value = SINGLES_JSON
+                    elif 'nonsingles' in url:
+                        mock_resp.json.return_value = NONSINGLES_JSON
+                    return mock_resp
+
+                mock_get.side_effect = mock_get_side_effect
+
+                loader = CardmarketLoader()
+                result = loader.run()
+
+            assert result['success'] is True
+
+            # Product 123456 "Monkey D. Luffy (OP01-001)" should be mapped
+            mapping = OpcmProductCardMap.query.filter_by(
+                oppcm_id_product=123456
+            ).first()
+            assert mapping is not None
+            assert mapping.oppcm_opset_id == 'OP-01'
+            assert mapping.oppcm_opcar_id == 'OP01-001'
+
+            # Check the Product Mapping step message shows auto-matched
+            pm_step = [s for s in result['steps']
+                       if s['step'] == 'Product Mapping'][0]
+            assert 'auto-matched' in pm_step['message']
+
 
 # ============================================================
 # 4.5: Price Routes Tests
