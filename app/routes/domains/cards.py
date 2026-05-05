@@ -6,8 +6,75 @@ from flask_login import login_required
 from sqlalchemy import or_
 from app import db
 from app.models import OpSet, OpCard
+from app.models.cardmarket import OpcmProductCardMap, OpcmPrice
 
 cards_bp = Blueprint('cards', __name__, url_prefix='/onepiecetcg/cards')
+
+
+def _build_price_map(card_items):
+    """Build a dict mapping (opset_id, card_id, version) → price info
+    for all cards on the current page.
+
+    Returns: {(opset_id, card_id, version): '€1.23'} or empty dict if no data.
+    """
+    if not card_items:
+        return {}
+
+    # Collect card identifiers from this page
+    card_keys = [(c.opcar_opset_id, c.opcar_id, c.opcar_version) for c in card_items]
+
+    # Find mappings to Cardmarket products for these cards
+    mappings = OpcmProductCardMap.query.filter(
+        db.tuple_(OpcmProductCardMap.oppcm_opset_id,
+                  OpcmProductCardMap.oppcm_opcar_id,
+                  OpcmProductCardMap.oppcm_opcar_version).in_(card_keys)
+    ).all()
+
+    if not mappings:
+        return {}
+
+    # Get product IDs, prioritizing non-foil (outer join: prefer N or NULL over S)
+    product_ids = list({m.oppcm_id_product for m in mappings})
+
+    # Find latest price date
+    latest_date = db.session.query(db.func.max(OpcmPrice.opprc_date)).scalar()
+    if not latest_date:
+        return {}
+
+    # Get prices for these products on the latest date
+    prices = OpcmPrice.query.filter(
+        OpcmPrice.opprc_date == latest_date,
+        OpcmPrice.opprc_id_product.in_(product_ids)
+    ).all()
+
+    product_price = {}
+    for p in prices:
+        # Prefer non-foil price; foil stored in same product sometimes
+        if p.opprd_id_product not in product_price:
+            product_price[p.opprd_id_product] = p.opprc_low
+        # Always keep the lowest price if multiple rows
+        elif product_price[p.opprd_id_product] is not None and p.opprc_low is not None:
+            if p.opprc_low < product_price[p.opprd_id_product]:
+                product_price[p.opprd_id_product] = p.opprc_low
+
+    # Build mapping key → price
+    key_to_product = {}
+    for m in mappings:
+        k = (m.oppcm_opset_id, m.oppcm_opcar_id, m.oppcm_opcar_version)
+        if k not in key_to_product or m.oppcm_foil is None or m.oppcm_foil == 'N':
+            # Prefer non-foil mapping
+            key_to_product[k] = m.oppcm_id_product
+
+    price_map = {}
+    for k, pid in key_to_product.items():
+        low = product_price.get(pid)
+        if low is not None:
+            try:
+                price_map[k] = f'€{float(low):.2f}'
+            except (ValueError, TypeError):
+                price_map[k] = f'€{low}'
+
+    return price_map
 
 
 @cards_bp.route('')
@@ -50,6 +117,9 @@ def cards():
     categories = distinct_values(OpCard.opcar_category)
     rarities = distinct_values(OpCard.opcar_rarity)
 
+    # Build price map for the cards on this page
+    price_map = _build_price_map(pagination.items)
+
     return render_template('cards.html',
                            cards=pagination.items,
                            pagination=pagination,
@@ -57,7 +127,8 @@ def cards():
                            colors=colors,
                            categories=categories,
                            rarities=rarities,
-                           per_page=per_page)
+                           per_page=per_page,
+                           price_map=price_map)
 
 
 @cards_bp.route('/search')
