@@ -325,6 +325,9 @@ def refresh_op_sets() -> dict:
             if not value:
                 continue
             label = option.get_text(strip=True)
+            # Site embeds escaped <br class="spInline"> in option text — strip it
+            label = re.sub(r'<br\s*[^>]*>', ' ', label).strip()
+            label = re.sub(r'\s{2,}', ' ', label)
             code = _parse_set_code_from_label(label)
             normalized_name = _normalize_set_name(code, label)
 
