@@ -50,12 +50,12 @@ def _build_price_map(card_items):
     product_price = {}
     for p in prices:
         # Prefer non-foil price; foil stored in same product sometimes
-        if p.opprd_id_product not in product_price:
-            product_price[p.opprd_id_product] = p.opprc_low
+        if p.opprc_id_product not in product_price:
+            product_price[p.opprc_id_product] = p.opprc_low
         # Always keep the lowest price if multiple rows
-        elif product_price[p.opprd_id_product] is not None and p.opprc_low is not None:
-            if p.opprc_low < product_price[p.opprd_id_product]:
-                product_price[p.opprd_id_product] = p.opprc_low
+        elif product_price[p.opprc_id_product] is not None and p.opprc_low is not None:
+            if p.opprc_low < product_price[p.opprc_id_product]:
+                product_price[p.opprc_id_product] = p.opprc_low
 
     # Build mapping key → price
     key_to_product = {}
