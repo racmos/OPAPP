@@ -48,7 +48,15 @@ def _parse_set_code_from_label(label: str) -> str:
 
 
 def _derive_opset_id(card_id_prefix: str) -> str:
-    """Convert card ID prefix to opset_id format: EB04 -> EB-04, OP01 -> OP-01."""
+    """Convert card ID prefix to opset_id format.
+    
+    Examples:
+        OP01 -> OP-01
+        EB04 -> EB-04
+        ST01 -> ST-01
+        PRB01 -> PRB-01
+        P -> P (promotion cards, no numeric part)
+    """
     m = re.match(r'^([A-Za-z]+)(\d+)$', card_id_prefix)
     if m:
         return f"{m.group(1)}-{m.group(2)}"
@@ -84,17 +92,20 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str) -> Optional[dict]:
     variant_suffix = variant_match.group(1) if variant_match else ''
     base_card_id = re.sub(r'_[a-z]+\d+$', '', card_id_full)
 
-    # Parse the parts of card_id: e.g., "OP01-001" → splits id part
-    m = re.match(r'^([A-Za-z]+\d+)-(\d+)$', base_card_id)
+    # Parse the parts of card_id: supports multiple formats
+    # Format 1: "OP01-001" (letters+digits-digits) — most cards
+    # Format 2: "P-044" (letters only-digits) — promotion cards
+    # Format 3: "ST01-001" (letters+digits-digits) — starter decks
+    m = re.match(r'^([A-Za-z]+\d*)-(\d+[a-zA-Z]*)$', base_card_id)
     if not m:
         logger.warning(f"Cannot parse card ID format: {card_id_full}")
         return None
-    card_id_prefix = m.group(1)  # e.g., "OP01", "EB04"
-    card_number = m.group(2)     # e.g., "001"
+    card_id_prefix = m.group(1)  # e.g., "OP01", "EB04", "P", "ST01"
+    card_number = m.group(2)     # e.g., "001", "044"
 
-    # Derive opset_id from value_id (the series dropdown value)
-    # e.g., "OP01" → "OP-01"
-    opset_id = _derive_opset_id(value_id)
+    # Derive opset_id from the card_id prefix (NOT from value_id which is numeric)
+    # e.g., "OP01" → "OP-01", "P" → "P"
+    opset_id = _derive_opset_id(card_id_prefix)
 
     # Parse infoCol
     info_col = dl_element.select_one('.infoCol')
