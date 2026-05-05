@@ -166,6 +166,36 @@ CARD_SET_HTML = """<!DOCTYPE html>
     </div>
   </dd>
 </dl>
+<dl class="modalCol" id="OP01-001_r1">
+  <dt>
+    <div class="infoCol">
+      <span>OP01-001_r1</span> | <span>L</span> | <span>LEADER</span>
+    </div>
+    <div class="cardName">Monkey D. Luffy</div>
+  </dt>
+  <dd>
+    <div class="frontCol">
+      <img src="../images/cardlist/card/OP01-001_r1.png">
+    </div>
+    <div class="backCol">
+      <div class="col2">
+        <div class="cost"><h3>Life</h3>5</div>
+        <div class="attribute"><h3>Attribute</h3><img alt="Strike"><i>Strike</i></div>
+      </div>
+      <div class="col2">
+        <div class="power"><h3>Power</h3>5000</div>
+        <div class="counter"><h3>Counter</h3>-</div>
+      </div>
+      <div class="col2">
+        <div class="color"><h3>Color</h3>Red</div>
+        <div class="block"><h3>Block icon</h3>3</div>
+      </div>
+      <div class="feature"><h3>Type</h3>Straw Hat Pirates</div>
+      <div class="text"><h3>Effect</h3>Reprint variant.</div>
+      <div class="getInfo"><h3>Card Set(s)</h3>ROMANCE DAWN [OP-01]</div>
+    </div>
+  </dd>
+</dl>
 </div>
 </body></html>"""
 
@@ -265,7 +295,7 @@ class TestOnepieceScraper:
 
             assert result['success'] is True
             stats = result['stats']
-            assert stats['total_scraped'] == 3  # 2 normal + 1 variant
+            assert stats['total_scraped'] == 4  # 2 normal + 1 parallel + 1 reprint
             assert stats['inserted'] >= 1
         
         # Verify card in DB — opset_id is derived as OP-01 (with hyphen)
@@ -335,6 +365,27 @@ class TestOnepieceScraper:
             variant = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001_p1').first()
             assert variant is not None
             assert '_p1' in variant.image
+
+    def test_extract_op_cards_handles_reprint_variant(self, app):
+        """extract_op_cards() handles _r1 (reprint) variants correctly."""
+        from app.services.onepiece_scraper import extract_op_cards
+        with app.app_context():
+            mock_session = MagicMock()
+            mock_get_resp = MagicMock()
+            mock_get_resp.text = CARD_SET_HTML
+            mock_get_resp.raise_for_status = MagicMock()
+            mock_session.post.return_value = mock_get_resp
+            mock_session.get.return_value = MagicMock(content=b'fakeimg', raise_for_status=MagicMock())
+
+            with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
+                extract_op_cards(filter_sets=['OP01'])
+
+        # Verify reprint variant (001_r1) exists
+        with app.app_context():
+            reprint = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001_r1').first()
+            assert reprint is not None
+            assert '_r1' in reprint.image
+            assert reprint.opcar_name == 'Monkey D. Luffy'
 
     def test_extract_op_cards_parses_multi_color(self, app):
         """Multi-color cards are parsed correctly (e.g. Red/Yellow)."""

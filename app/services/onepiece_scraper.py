@@ -79,10 +79,10 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str) -> Optional[dict]:
     if not card_id_full:
         return None
 
-    # Detect variant
-    variant_match = re.search(r'(_p\d+)$', card_id_full)
+    # Detect variant — handles _p1 (parallel), _r1 (reprint), etc.
+    variant_match = re.search(r'(_[a-z]+\d+)$', card_id_full)
     variant_suffix = variant_match.group(1) if variant_match else ''
-    base_card_id = re.sub(r'_p\d+$', '', card_id_full)
+    base_card_id = re.sub(r'_[a-z]+\d+$', '', card_id_full)
 
     # Parse the parts of card_id: e.g., "OP01-001" → splits id part
     m = re.match(r'^([A-Za-z]+\d+)-(\d+)$', base_card_id)
