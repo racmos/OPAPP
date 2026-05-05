@@ -286,9 +286,8 @@ class TestOnepieceScraper:
             mock_get_resp.text = CARD_SET_HTML
             mock_get_resp.raise_for_status = MagicMock()
 
-            mock_session.post.return_value = mock_get_resp
-            # Also mock image downloads
-            mock_session.get.return_value = MagicMock(content=b'fakeimg', raise_for_status=MagicMock())
+            # GET is now used for fetching cards (all in one page)
+            mock_session.get.return_value = mock_get_resp
 
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 result = extract_op_cards(filter_sets=['OP01'])
@@ -323,8 +322,7 @@ class TestOnepieceScraper:
             mock_get_resp = MagicMock()
             mock_get_resp.text = CARD_SET_HTML
             mock_get_resp.raise_for_status = MagicMock()
-            mock_session.post.return_value = mock_get_resp
-            mock_session.get.return_value = MagicMock(content=b'fakeimg', raise_for_status=MagicMock())
+            mock_session.get.return_value = mock_get_resp
 
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
@@ -350,8 +348,7 @@ class TestOnepieceScraper:
             mock_get_resp = MagicMock()
             mock_get_resp.text = CARD_SET_HTML
             mock_get_resp.raise_for_status = MagicMock()
-            mock_session.post.return_value = mock_get_resp
-            mock_session.get.return_value = MagicMock(content=b'fakeimg', raise_for_status=MagicMock())
+            mock_session.get.return_value = mock_get_resp
 
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
@@ -374,8 +371,7 @@ class TestOnepieceScraper:
             mock_get_resp = MagicMock()
             mock_get_resp.text = CARD_SET_HTML
             mock_get_resp.raise_for_status = MagicMock()
-            mock_session.post.return_value = mock_get_resp
-            mock_session.get.return_value = MagicMock(content=b'fakeimg', raise_for_status=MagicMock())
+            mock_session.get.return_value = mock_get_resp
 
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
@@ -558,7 +554,7 @@ class TestPriceRoutes:
             }
             with patch('app.services.onepiece_scraper.extract_op_cards', return_value=mock_result):
                 resp = client.post('/onepiecetcg/price/extract-op-cards',
-                                   data=json.dumps({'sets': ['OP01']}),
+                                   data=json.dumps({'sets': [{'id': '569101', 'code': 'OP-01'}]}),
                                    content_type='application/json')
                 assert resp.status_code == 200
                 data = resp.get_json()

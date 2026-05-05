@@ -327,8 +327,8 @@
                     const label = document.createElement('label');
                     label.className = 'set-checkbox';
                     label.innerHTML = `
-                        <input type="checkbox" name="op_sets" value="${s.id}" class="op-set-check" checked>
-                        ${s.label || s.id} (${s.id})
+                        <input type="checkbox" name="op_sets" value="${s.id}" data-code="${s.code || ''}" class="op-set-check" checked>
+                        ${s.label || s.id} (${s.code || s.id})
                     `;
                     container.appendChild(label);
                 });
@@ -359,7 +359,7 @@
 
         const selectedSets = [];
         document.querySelectorAll('.op-set-check:checked').forEach(cb => {
-            selectedSets.push(cb.value);
+            selectedSets.push({id: cb.value, code: cb.dataset.code || null});
         });
 
         const resultSection = document.getElementById('opResultSection');

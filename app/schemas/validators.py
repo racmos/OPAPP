@@ -154,9 +154,15 @@ class DeckSave(BaseModel):
 # ============== Price / Scraper Schemas ==============
 
 
+class OpExtractSet(BaseModel):
+    """Single set selection for extraction."""
+    id: str = Field(..., description="Dropdown value ID (e.g. '569302')")
+    code: Optional[str] = Field(None, description="Set code (e.g. 'PRB-02')")
+
+
 class OpExtract(BaseModel):
     """Schema for One Piece card extraction request."""
-    sets: list[str] = Field(default_factory=list, description="List of set IDs to extract (empty = all)")
+    sets: list[OpExtractSet] = Field(default_factory=list, description="List of sets to extract (empty = all)")
 
 
 class IgnoredAdd(BaseModel):

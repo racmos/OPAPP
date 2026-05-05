@@ -73,13 +73,16 @@ def _safe_int(value: str) -> Optional[int]:
         return None
 
 
-def _parse_card_dl(dl_element, set_id: str, value_id: str) -> Optional[dict]:
+def _parse_card_dl(dl_element, set_id: str, value_id: str,
+                   set_code_override: Optional[str] = None) -> Optional[dict]:
     """Parse a <dl class='modalCol'> element into a card dict.
 
     Args:
         dl_element: BeautifulSoup Tag for the <dl> element.
-        set_id: The opset_id (e.g., 'OP-01') derived from value_id.
-        value_id: The raw series dropdown value (e.g., 'OP01').
+        set_id: The raw series dropdown value (numeric ID).
+        value_id: The raw series dropdown value (e.g., '569302').
+        set_code_override: If provided, use this as opset_id (e.g. 'PRB-02')
+                          instead of deriving from card_id prefix.
 
     Returns dict with card fields, or None on failure.
     """
@@ -103,9 +106,12 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str) -> Optional[dict]:
     card_id_prefix = m.group(1)  # e.g., "OP01", "EB04", "P", "ST01"
     card_number = m.group(2)     # e.g., "001", "044"
 
-    # Derive opset_id from the card_id prefix (NOT from value_id which is numeric)
-    # e.g., "OP01" → "OP-01", "P" → "P"
-    opset_id = _derive_opset_id(card_id_prefix)
+    # Use set_code_override if provided (e.g. PRB-02 from dropdown label),
+    # otherwise derive from card_id prefix (fallback for legacy/tests)
+    if set_code_override:
+        opset_id = set_code_override
+    else:
+        opset_id = _derive_opset_id(card_id_prefix)
 
     # Parse infoCol
     info_col = dl_element.select_one('.infoCol')
@@ -309,13 +315,13 @@ def refresh_op_sets() -> dict:
         return {'success': False, 'message': str(e), 'sets': []}
 
 
-def extract_op_cards(filter_sets: list[str] | None = None) -> dict:
+def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
     """
     Scrape One Piece cardlist, extract cards, download images, insert/update DB.
 
     Args:
-        filter_sets: list of series dropdown values to extract (e.g. ['OP01']).
-                     Empty/None = all sets (fetched from dropdown).
+        filter_sets: list of dicts {id, code} from dropdown, or list of numeric
+                     value IDs (legacy). Empty/None = all sets (fetched from dropdown).
 
     Returns:
         { success, steps: [{step, status, message}], stats: {...} }
@@ -336,7 +342,7 @@ def extract_op_cards(filter_sets: list[str] | None = None) -> dict:
 
     session = _get_session()
 
-    # Step 1: If no filter_sets, fetch set list first
+    # Normalize filter_sets to list of {id, code} dicts
     if not filter_sets:
         steps.append({'step': '1. Fetch set list', 'status': 'RUNNING', 'message': 'Fetching available sets...'})
         try:
@@ -345,7 +351,7 @@ def extract_op_cards(filter_sets: list[str] | None = None) -> dict:
                 steps[-1]['status'] = 'ERROR'
                 steps[-1]['message'] = refresh_result.get('message', 'Failed to get sets')
                 return {'success': False, 'steps': steps, 'stats': stats}
-            filter_sets = [s['id'] for s in refresh_result['sets']]
+            filter_sets = refresh_result['sets']  # [{id, label, code}, ...]
             steps[-1]['status'] = 'SUCCESS'
             steps[-1]['message'] = f'Found {len(filter_sets)} sets'
         except Exception as e:
@@ -353,40 +359,59 @@ def extract_op_cards(filter_sets: list[str] | None = None) -> dict:
             steps[-1]['message'] = str(e)
             return {'success': False, 'steps': steps, 'stats': stats}
     else:
+        # Normalize: if list of strings, convert to dicts (legacy support)
+        if filter_sets and isinstance(filter_sets[0], str):
+            filter_sets = [{'id': v, 'code': None} for v in filter_sets]
         steps.append({'step': '1. Selected sets', 'status': 'INFO', 'message': f'{len(filter_sets)} sets selected'})
 
     all_cards = []
     step_idx = 2
 
     # Step 2: Fetch cards for each set
-    for value_id in filter_sets:
-        step_label = f'{step_idx}. Fetch {value_id}'
-        steps.append({'step': step_label, 'status': 'RUNNING', 'message': f'Fetching cards for {value_id}...'})
+    for set_info in filter_sets:
+        value_id = set_info['id'] if isinstance(set_info, dict) else set_info
+        set_code = set_info.get('code') if isinstance(set_info, dict) else None
+        step_label = f'{step_idx}. Fetch {set_code or value_id}'
+        steps.append({'step': step_label, 'status': 'RUNNING', 'message': f'Fetching cards for {set_code or value_id}...'})
         try:
-            resp = session.post(
-                CARD_LIST_URL,
-                data={'series': value_id},
-                timeout=30,
+            # Use GET with query param (all cards returned in single page)
+            resp = session.get(
+                f'{CARD_LIST_URL}?series={value_id}',
+                timeout=60,
             )
             resp.raise_for_status()
 
             soup = BeautifulSoup(resp.text, 'html.parser')
             dl_elements = soup.find_all('dl', class_='modalCol')
 
+            # If no set_code provided, try to extract from page count
+            if not set_code:
+                # Try to get it from the first card's ID prefix
+                if dl_elements:
+                    first_id = dl_elements[0].get('id', '')
+                    base_id = re.sub(r'_[a-z]+\d+$', '', first_id)
+                    m = re.match(r'^([A-Za-z]+\d*)-', base_id)
+                    if m:
+                        set_code = _derive_opset_id(m.group(1))
+
             set_cards = 0
             for dl in dl_elements:
-                card_data = _parse_card_dl(dl, set_id=value_id, value_id=value_id)
+                card_data = _parse_card_dl(dl, set_id=value_id, value_id=value_id, set_code_override=set_code)
                 if card_data is None:
                     continue
                 all_cards.append(card_data)
                 set_cards += 1
 
+            # Get expected count from page
+            count_el = soup.select_one('.countCol')
+            expected = count_el.get_text(strip=True) if count_el else '?'
+
             steps[-1]['status'] = 'SUCCESS'
-            steps[-1]['message'] = f'{set_cards} cards found for {value_id}'
+            steps[-1]['message'] = f'{set_cards} cards parsed ({expected}) for {set_code or value_id}'
             stats['total_scraped'] += set_cards
         except Exception as e:
             steps[-1]['status'] = 'ERROR'
-            steps[-1]['message'] = f'Error fetching {value_id}: {e}'
+            steps[-1]['message'] = f'Error fetching {set_code or value_id}: {e}'
             stats['errors'].append(str(e))
         step_idx += 1
 

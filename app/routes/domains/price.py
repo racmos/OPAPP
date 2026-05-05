@@ -49,9 +49,11 @@ def extract_op_cards():
     """Scrape One Piece cardlist, extract cards + images, insert to DB."""
     from app.services.onepiece_scraper import extract_op_cards as _extract
     data = request.validated_data
-    filter_sets = data.sets if data.sets else []
+    filter_sets = None
+    if data.sets:
+        filter_sets = [{'id': s.id, 'code': s.code} for s in data.sets]
     try:
-        result = _extract(filter_sets=filter_sets if filter_sets else None)
+        result = _extract(filter_sets=filter_sets)
         return jsonify(result)
     except Exception as e:
         return jsonify({
