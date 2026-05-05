@@ -214,11 +214,11 @@ PRICE_GUIDE_JSON = {
 
 SINGLES_JSON = {
     "products": [
-        {"idProduct": 123456, "name": "Monkey D. Luffy", "idCategory": 1,
-         "categoryName": "Magic Single", "idExpansion": 1001,
+        {"idProduct": 123456, "name": "Monkey D. Luffy (OP01-001)", "idCategory": 1,
+         "categoryName": "One Piece Single", "idExpansion": 1001,
          "idMetacard": 5001, "dateAdded": "2024-01-01"},
-        {"idProduct": 234567, "name": "Roronoa Zoro", "idCategory": 1,
-         "categoryName": "Magic Single", "idExpansion": 1001,
+        {"idProduct": 234567, "name": "Roronoa Zoro (OP01-002)", "idCategory": 1,
+         "categoryName": "One Piece Single", "idExpansion": 1001,
          "idMetacard": 5002, "dateAdded": "2024-01-01"},
     ]
 }
@@ -451,7 +451,7 @@ class TestCardmarketLoader:
                 result = loader.run()
 
             assert result['success'] is True
-            assert len(result['steps']) >= 6
+            assert len(result['steps']) >= 7  # includes Expansion Mapping step
             assert len(result['errors']) == 0
 
             # Verify products loaded
@@ -509,6 +509,175 @@ class TestCardmarketLoader:
             # Validation step should note singles skipped or no changes
             validation_msg = '; '.join(s['message'] for s in result['steps'] if s['step'] == 'Validation')
             assert 'no changes' in validation_msg.lower() or 'singles' in validation_msg.lower()
+
+
+    def test_auto_map_expansions_by_card_id(self, app):
+        """_auto_map_expansions maps expansion to set using card IDs in names."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            # Seed internal set OP-04
+            _seed_set(app, 'OP-04', 'Kingdoms of Intrigue')
+
+            # Create unmapped expansion
+            db.session.add(OpcmExpansion(opexp_id=5365, opexp_name=None, opexp_opset_id=None))
+            db.session.commit()
+
+            # Products with card IDs pointing to OP04
+            products = [
+                {"idProduct": 1, "name": "Trafalgar Law (OP04-001)", "idExpansion": 5365},
+                {"idProduct": 2, "name": "Nami (OP04-036)", "idExpansion": 5365},
+                {"idProduct": 3, "name": "Luffy (OP04-089)", "idExpansion": 5365},
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['auto_mapped'] == 1
+            assert counts['no_match'] == 0
+
+            exp = OpcmExpansion.query.get(5365)
+            assert exp.opexp_opset_id == 'OP-04'
+
+    def test_auto_map_expansions_majority_vote(self, app):
+        """Expansion mapped by majority card ID prefix when mixed."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-01', 'Romance Dawn')
+            db.session.add(OpcmExpansion(opexp_id=9999, opexp_opset_id=None))
+            db.session.commit()
+
+            # 3 OP01 cards, 1 outlier P-001 (e.g. promo included in expansion)
+            products = [
+                {"idProduct": 1, "name": "Luffy (OP01-001)", "idExpansion": 9999},
+                {"idProduct": 2, "name": "Zoro (OP01-002)", "idExpansion": 9999},
+                {"idProduct": 3, "name": "Nami (OP01-016)", "idExpansion": 9999},
+                {"idProduct": 4, "name": "DON!!", "idExpansion": 9999},  # no card ID
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['auto_mapped'] == 1
+            exp = OpcmExpansion.query.get(9999)
+            assert exp.opexp_opset_id == 'OP-01'
+
+    def test_auto_map_expansions_skips_already_mapped(self, app):
+        """Already-mapped expansions are not overwritten."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-04', 'Kingdoms of Intrigue')
+            db.session.add(OpcmExpansion(
+                opexp_id=5365, opexp_opset_id='OP-04'  # already mapped
+            ))
+            db.session.commit()
+
+            products = [
+                {"idProduct": 1, "name": "Luffy (OP04-001)", "idExpansion": 5365},
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['already_mapped'] == 1
+            assert counts['auto_mapped'] == 0
+
+    def test_auto_map_expansions_no_match_if_set_missing(self, app):
+        """Expansion not mapped if deduced set doesn't exist in opsets."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            # No OP-99 set exists
+            db.session.add(OpcmExpansion(opexp_id=7777, opexp_opset_id=None))
+            db.session.commit()
+
+            products = [
+                {"idProduct": 1, "name": "Card (OP99-001)", "idExpansion": 7777},
+                {"idProduct": 2, "name": "Card (OP99-002)", "idExpansion": 7777},
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['no_match'] == 1
+            assert counts['auto_mapped'] == 0
+            exp = OpcmExpansion.query.get(7777)
+            assert exp.opexp_opset_id is None
+
+    def test_auto_map_expansions_handles_starter_decks(self, app):
+        """Expansion with ST-prefix cards maps correctly."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'ST-01', 'Starter Deck: Straw Hat Crew')
+            db.session.add(OpcmExpansion(opexp_id=5237, opexp_opset_id=None))
+            db.session.commit()
+
+            products = [
+                {"idProduct": 1, "name": "Monkey.D.Luffy (ST01-001)", "idExpansion": 5237},
+                {"idProduct": 2, "name": "Nami (ST01-007)", "idExpansion": 5237},
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['auto_mapped'] == 1
+            exp = OpcmExpansion.query.get(5237)
+            assert exp.opexp_opset_id == 'ST-01'
+
+    def test_auto_map_expansions_no_card_ids_in_names(self, app):
+        """Expansion with no card IDs in product names → no_match."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            db.session.add(OpcmExpansion(opexp_id=8888, opexp_opset_id=None))
+            db.session.commit()
+
+            products = [
+                {"idProduct": 1, "name": "Booster Box", "idExpansion": 8888},
+                {"idProduct": 2, "name": "Bundle Pack", "idExpansion": 8888},
+            ]
+
+            loader = CardmarketLoader()
+            counts = loader._auto_map_expansions(products)
+
+            assert counts['no_match'] == 1
+            assert counts['auto_mapped'] == 0
+
+    def test_loader_run_includes_expansion_mapping_step(self, app):
+        """Full loader run includes Expansion Mapping step in output."""
+        from app.services.cardmarket_loader import CardmarketLoader
+
+        with app.app_context():
+            _seed_set(app, 'OP-01', 'Romance Dawn')
+
+            with patch('app.services.cardmarket_loader.requests.get') as mock_get:
+                def mock_get_side_effect(url, timeout=30):
+                    mock_resp = MagicMock()
+                    mock_resp.raise_for_status = MagicMock()
+                    if 'price_guide' in url:
+                        mock_resp.json.return_value = PRICE_GUIDE_JSON
+                    elif 'singles' in url:
+                        mock_resp.json.return_value = SINGLES_JSON
+                    elif 'nonsingles' in url:
+                        mock_resp.json.return_value = NONSINGLES_JSON
+                    return mock_resp
+
+                mock_get.side_effect = mock_get_side_effect
+
+                loader = CardmarketLoader()
+                result = loader.run()
+
+            assert result['success'] is True
+            step_names = [s['step'] for s in result['steps']]
+            assert 'Expansion Mapping' in step_names
+
+            # Expansion 1001 from SINGLES_JSON should be auto-mapped to OP-01
+            exp = OpcmExpansion.query.get(1001)
+            assert exp is not None
+            assert exp.opexp_opset_id == 'OP-01'
 
 
 # ============================================================

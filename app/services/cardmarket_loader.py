@@ -6,6 +6,8 @@ validates changes via SHA-256, and loads to PostgreSQL tables.
 import hashlib
 import json
 import logging
+import re
+from collections import Counter
 from datetime import datetime
 from typing import Optional
 
@@ -113,14 +115,28 @@ class CardmarketLoader:
                 self._record_history('singles', singles_hash, 0, 'skipped', 'No changes')
                 self._record_history('nonsingles', nonsingles_hash, 0, 'skipped', 'No changes')
 
-            # Step 5: Load prices (always daily)
+            # Step 5: Auto-map expansions to internal sets
+            self._add_step('Expansion Mapping', 'RUNNING',
+                           'Auto-mapping expansions to sets by card ID analysis...')
+            # Use ALL products (singles + nonsingles) for best coverage
+            combined_products = (
+                singles_data.get('products', []) +
+                nonsingles_data.get('products', [])
+            )
+            exp_map = self._auto_map_expansions(combined_products)
+            exp_msg = (f"{exp_map['auto_mapped']} auto-mapped, "
+                       f"{exp_map['already_mapped']} already mapped, "
+                       f"{exp_map['no_match']} no match")
+            self._update_step('Expansion Mapping', 'SUCCESS', exp_msg)
+
+            # Step 6: Load prices (always daily)
             self._add_step('Prices', 'RUNNING', 'Loading price data...')
             price_count = self._load_prices(price_data.get('priceGuides', []))
             self._record_history('price_guide', price_hash, price_count, 'success',
                                  f'Loaded {price_count} price records')
             self._update_step('Prices', 'SUCCESS', f'{price_count} price records loaded')
 
-            # Step 6: Auto-map products to internal cards
+            # Step 7: Auto-map products to internal cards
             self._add_step('Product Mapping', 'RUNNING', 'Auto-mapping products to cards...')
             map_counts = self._update_product_card_map()
             self.unmatched_count = map_counts['unmatched']
@@ -199,6 +215,90 @@ class CardmarketLoader:
 
         db.session.flush()
         return len(expansions)
+
+    def _auto_map_expansions(self, all_products: list) -> dict:
+        """Auto-map Cardmarket expansions to internal sets by analysing card IDs.
+
+        Strategy: singles product names contain card IDs like ``(OP01-001)``.
+        For each expansion, extract the set prefix from all its products,
+        take the majority vote, convert to opset_id format (``OP-01``), and
+        map if the set exists in opsets and the expansion is not yet mapped.
+
+        Returns dict: {auto_mapped: int, already_mapped: int, no_match: int}
+        """
+        from app.models.set import OpSet
+
+        counts = {'auto_mapped': 0, 'already_mapped': 0, 'no_match': 0}
+
+        # Card ID pattern inside parentheses: (OP01-001), (ST01-001), (EB01-001), (P-001)
+        card_id_re = re.compile(r'\(([A-Za-z]+\d*)-(\d+)\)')
+
+        # Group products by expansion
+        exp_products: dict[int, list[str]] = {}
+        for p in all_products:
+            exp_id = p.get('idExpansion')
+            name = p.get('name', '')
+            if exp_id and name:
+                exp_products.setdefault(exp_id, []).append(name)
+
+        # Build set of existing opset_ids for fast lookup
+        existing_sets = {s.opset_id for s in OpSet.query.all()}
+
+        for exp_id, names in exp_products.items():
+            exp = OpcmExpansion.query.get(exp_id)
+            if not exp:
+                continue
+            if exp.opexp_opset_id is not None:
+                counts['already_mapped'] += 1
+                continue
+
+            # Extract set prefixes from card IDs in product names
+            prefix_counts: Counter = Counter()
+            for name in names:
+                m = card_id_re.search(name)
+                if m:
+                    raw_prefix = m.group(1)  # e.g. OP01, ST01, EB04, PRB02
+                    # Convert to opset_id format: OP01 -> OP-01
+                    pm = re.match(r'^([A-Za-z]+)(\d+)$', raw_prefix)
+                    if pm:
+                        opset_id = f'{pm.group(1)}-{pm.group(2)}'
+                    else:
+                        opset_id = raw_prefix  # e.g. P
+                    prefix_counts[opset_id] += 1
+
+            if not prefix_counts:
+                counts['no_match'] += 1
+                continue
+
+            # Take the set with most votes
+            best_set, best_count = prefix_counts.most_common(1)[0]
+            total = sum(prefix_counts.values())
+            confidence = best_count / total if total else 0
+
+            # Only map if the set exists in opsets
+            # Accept case-insensitive match
+            matched_set = None
+            for sid in existing_sets:
+                if sid.upper() == best_set.upper():
+                    matched_set = sid
+                    break
+
+            if matched_set and confidence >= 0.5:
+                exp.opexp_opset_id = matched_set
+                # Also store expansion name from nonsingles product name if missing
+                if not exp.opexp_name:
+                    # Use the first product name as expansion name
+                    exp.opexp_name = names[0] if names else None
+                counts['auto_mapped'] += 1
+                logger.info(
+                    f'Auto-mapped expansion {exp_id} -> {matched_set} '
+                    f'(confidence={confidence:.0%}, {best_count}/{total} cards)'
+                )
+            else:
+                counts['no_match'] += 1
+
+        db.session.flush()
+        return counts
 
     def _load_products(self, products: list, product_type: str) -> int:
         """Load products to opcm_products. Upsert by date + idProduct."""
