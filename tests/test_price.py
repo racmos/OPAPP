@@ -45,10 +45,10 @@ def _seed_set(app, set_id='OP01', set_name='Romance Dawn',
 
 
 def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
-               category='Leader', color='Red', rarity='Leader'):
+               category='Leader', color='Red', rarity='Leader', version='p0'):
     """Seed a test card."""
     c = OpCard(
-        opcar_opset_id=set_id, opcar_id=card_id, opcar_name=name,
+        opcar_opset_id=set_id, opcar_id=card_id, opcar_version=version, opcar_name=name,
         opcar_category=category, opcar_color=color, opcar_rarity=rarity
     )
     db.session.add(c)
@@ -69,6 +69,8 @@ CARD_PAGE_HTML = """<!DOCTYPE html>
     <option value="OP02">PARAMOUNT WAR [OP-02]</option>
     <option value="ST01">STARTER DECK 1 [ST-01]</option>
     <option value="EB04">ADVENTURE ON KAMI'S ISLAND [OP15-EB04]</option>
+    <option value="569901">Promotion card</option>
+    <option value="569801">Other Product Card</option>
   </select>
 </form>
 </body></html>"""
@@ -98,7 +100,7 @@ CARD_SET_HTML = """<!DOCTYPE html>
       </div>
       <div class="col2">
         <div class="color"><h3>Color</h3>Red</div>
-        <div class="block"><h3>Block icon</h3>3</div>
+        <div class="block"><h3>Block<br> icon</h3>3</div>
       </div>
       <div class="feature"><h3>Type</h3>Straw Hat Pirates</div>
       <div class="text"><h3>Effect</h3>[Activate:Main] You may trash 1 card from your hand: Draw 1 card.</div>
@@ -251,7 +253,7 @@ class TestOnepieceScraper:
                 result = refresh_op_sets()
 
             assert result['success'] is True
-            assert len(result['sets']) == 4
+            assert len(result['sets']) == 6
             # Check OP01
             op01 = result['sets'][0]
             assert op01['id'] == 'OP01'
@@ -261,6 +263,12 @@ class TestOnepieceScraper:
             eb04 = result['sets'][3]
             assert eb04['id'] == 'EB04'
             assert eb04['code'] == 'OP15-EB04'
+            promo = result['sets'][4]
+            assert promo['code'] == 'P'
+            assert promo['name'] == 'Promo Cards'
+            opc = result['sets'][5]
+            assert opc['code'] == 'OPC'
+            assert opc['name'] == 'Other / Miscellaneous'
 
     def test_refresh_op_sets_no_dropdown(self, app):
         """refresh_op_sets handles missing dropdown gracefully."""
@@ -301,6 +309,7 @@ class TestOnepieceScraper:
         with app.app_context():
             card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001').first()
             assert card is not None
+            assert card.opcar_version == 'p0'
             assert card.opcar_name == 'Monkey D. Luffy'
             assert card.opcar_category == 'LEADER'
             assert card.opcar_rarity == 'L'
@@ -313,6 +322,9 @@ class TestOnepieceScraper:
             assert card.opcar_block_icon == 3
             assert card.opcar_type == 'Straw Hat Pirates'
             assert 'Activate:Main' in (card.opcar_effect or '')
+            opset = OpSet.query.filter_by(opset_id='OP-01').first()
+            assert opset is not None
+            assert opset.opset_ncard == 4
 
     def test_extract_op_cards_parses_character(self, app):
         """extract_op_cards() parses a Character card (Cost not Life)."""
@@ -341,7 +353,7 @@ class TestOnepieceScraper:
             assert card.opcar_color == 'Green'
 
     def test_extract_op_cards_handles_variant(self, app):
-        """extract_op_cards() creates variant entries with variant suffix in opcar_id."""
+        """extract_op_cards() stores variant suffix in opcar_version."""
         from app.services.onepiece_scraper import extract_op_cards
         with app.app_context():
             mock_session = MagicMock()
@@ -353,14 +365,19 @@ class TestOnepieceScraper:
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
 
-        # Verify both normal (OP01-001) and variant (OP01-001_p1) exist
+        # Verify both normal (OP01-001/p0) and variant (OP01-001/p1) exist
         with app.app_context():
-            normal = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001').first()
+            normal = OpCard.query.filter_by(
+                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p0'
+            ).first()
             assert normal is not None
             assert 'OP01-001.png' in normal.image
             
-            variant = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001_p1').first()
+            variant = OpCard.query.filter_by(
+                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p1'
+            ).first()
             assert variant is not None
+            assert variant.opcar_id == 'OP01-001'
             assert '_p1' in variant.image
 
     def test_extract_op_cards_handles_reprint_variant(self, app):
@@ -376,10 +393,13 @@ class TestOnepieceScraper:
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
 
-        # Verify reprint variant (OP01-001_r1) exists
+        # Verify reprint variant (OP01-001/r1) exists
         with app.app_context():
-            reprint = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001_r1').first()
+            reprint = OpCard.query.filter_by(
+                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='r1'
+            ).first()
             assert reprint is not None
+            assert reprint.opcar_id == 'OP01-001'
             assert '_r1' in reprint.image
             assert reprint.opcar_name == 'Monkey D. Luffy'
 
@@ -652,6 +672,28 @@ class TestPriceRoutes:
             assert mapping is not None
             assert mapping.oppcm_opset_id == 'OP01'
             assert mapping.oppcm_opcar_id == 'OP01-001'
+            assert mapping.oppcm_opcar_version == 'p0'
+
+    def test_cardmarket_map_accepts_card_version(self, app, client):
+        """Manual mapping stores explicit card version for variants."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Monkey D. Luffy', version='p1')
+        resp = client.post('/onepiecetcg/price/cardmarket-map',
+                           data=json.dumps({
+                               'id_product': 124,
+                               'rbset_id': 'OP01',
+                               'rbcar_id': 'OP01-001',
+                               'rbcar_version': 'p1',
+                           }), content_type='application/json')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        with app.app_context():
+            mapping = OpcmProductCardMap.query.filter_by(oppcm_id_product=124).first()
+            assert mapping is not None
+            assert mapping.oppcm_opcar_version == 'p1'
 
     def test_cardmarket_map_missing_fields(self, app, client):
         """map returns 400 for missing required fields."""

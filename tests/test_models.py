@@ -80,22 +80,32 @@ class TestOpCard:
     def test_has_composite_primary_key(self):
         from app.models import OpCard
         pk_cols = {c.name for c in OpCard.__table__.primary_key.columns}
-        assert pk_cols == {'opcar_opset_id', 'opcar_id'}
+        assert pk_cols == {'opcar_opset_id', 'opcar_id', 'opcar_version'}
 
     def test_has_one_piece_fields(self):
         from app.models import OpCard
         columns = {c.name for c in OpCard.__table__.columns}
         expected_fields = {
-            'opcar_opset_id', 'opcar_id', 'opcar_name',
+            'opcar_opset_id', 'opcar_id', 'opcar_version', 'opcar_name',
             'opcar_category', 'opcar_color', 'opcar_rarity',
             'opcar_cost', 'opcar_life', 'opcar_power',
             'opcar_counter', 'opcar_attribute', 'opcar_type',
-            'opcar_effect', 'opcar_block_icon', 'opcar_illustration_type',
-            'opcar_artist', 'opcar_banned',
+            'opcar_effect', 'opcar_block_icon', 'opcar_banned',
             'image_url', 'image',
         }
         for field in expected_fields:
             assert field in columns, f"Missing field: {field}"
+        assert 'opcar_illustration_type' not in columns
+        assert 'opcar_artist' not in columns
+
+    def test_opcar_version_defaults_to_p0(self):
+        from app.models import OpCard
+        card = OpCard(
+            opcar_opset_id='OP-01',
+            opcar_id='OP01-001',
+            opcar_name='Test Card',
+        )
+        assert card.opcar_version == 'p0'
 
     def test_image_src_property_with_image(self):
         from app.models import OpCard
@@ -105,7 +115,7 @@ class TestOpCard:
             opcar_name='Test Card',
             image='op01_001.png',
         )
-        assert card.image_src == '/onepiecetcg/static/images/cards/op01/op01_001.png'
+        assert card.image_src == '/onepiecetcg/static/images/cards/op-01/op01_001.png'
 
     def test_image_src_property_with_variant_image(self):
         from app.models import OpCard
@@ -115,8 +125,7 @@ class TestOpCard:
             opcar_name='Variant Card',
             image='EB04-001_p1.jpg',
         )
-        # folder extracted from image filename prefix before _
-        assert card.image_src == '/onepiecetcg/static/images/cards/eb04/EB04-001_p1.jpg'
+        assert card.image_src == '/onepiecetcg/static/images/cards/eb-04/EB04-001_p1.jpg'
 
     def test_image_src_property_with_none_image(self):
         from app.models import OpCard
@@ -128,10 +137,10 @@ class TestOpCard:
         assert card.image_src is None
 
     def test_image_src_with_promo_set(self):
-        """Promo sets should use the image filename prefix, not the set ID."""
+        """Promo sets should use normalized opset_id folder."""
         from app.models import OpCard
         card = OpCard(
-            opcar_opset_id='P-001',
+            opcar_opset_id='P',
             opcar_id='P-001',
             opcar_name='Promo Card',
             image='p_001.png',
@@ -154,7 +163,7 @@ class TestOpCollection:
         from app.models import OpCollection
         columns = {c.name for c in OpCollection.__table__.columns}
         expected = {
-            'opcol_id', 'opcol_opset_id', 'opcol_opcar_id',
+            'opcol_id', 'opcol_opset_id', 'opcol_opcar_id', 'opcol_opcar_version',
             'opcol_foil', 'opcol_user', 'opcol_quantity',
             'opcol_selling', 'opcol_playset', 'opcol_sell_price',
             'opcol_condition', 'opcol_language', 'opcol_chadat',
@@ -302,6 +311,11 @@ class TestCardmarketModels:
     def test_opcm_product_card_map_table_name(self):
         from app.models import OpcmProductCardMap
         assert OpcmProductCardMap.__tablename__ == 'opcm_product_card_map'
+
+    def test_opcm_product_card_map_has_version_column(self):
+        from app.models import OpcmProductCardMap
+        columns = {c.name for c in OpcmProductCardMap.__table__.columns}
+        assert 'oppcm_opcar_version' in columns
 
     def test_opcm_ignored_table_name(self):
         from app.models import OpcmIgnored

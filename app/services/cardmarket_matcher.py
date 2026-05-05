@@ -50,18 +50,16 @@ def card_rank_key(card: OpCard):
     rarity = (card.opcar_rarity or '').lower()
     opset_id = card.opcar_opset_id or ''
     opcar_id = card.opcar_id or ''
+    opcar_version = card.opcar_version or 'p0'
     is_promo_set = opset_id.endswith('X') or opset_id.startswith('PR')
 
     base = _RARITY_RANK.get(rarity, 3) * 1.0
 
     suffix_bonus = 0.0
-    suffix_match = re.match(r'^\d+([a-z]+)$', opcar_id)
-    if suffix_match:
-        suffix = suffix_match.group(1)
-        if 'a' in suffix:
-            suffix_bonus += 0.30
-        if 's' in suffix:
-            suffix_bonus += 0.55
+    if opcar_version != 'p0':
+        suffix_bonus += 0.30
+        if opcar_version.startswith('r'):
+            suffix_bonus += 0.10
 
     set_bonus = 0.0
     if is_promo_set:
@@ -72,7 +70,7 @@ def card_rank_key(card: OpCard):
         else:
             set_bonus = 0.10
 
-    return (base + suffix_bonus + set_bonus, opset_id, opcar_id)
+    return (base + suffix_bonus + set_bonus, opset_id, opcar_id, opcar_version)
 
 
 def _get_latest_prices() -> dict[int, float]:
@@ -167,7 +165,7 @@ def _expand_slots(card: OpCard, taken: Optional[set] = None) -> list[tuple[OpCar
 
     return [
         s for s in raw_slots
-        if (card.opcar_opset_id, card.opcar_id, s[1]) not in taken
+        if (card.opcar_opset_id, card.opcar_id, card.opcar_version, s[1]) not in taken
     ]
 
 
@@ -204,6 +202,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
         db.session.query(
             OpcmProductCardMap.oppcm_opset_id,
             OpcmProductCardMap.oppcm_opcar_id,
+            OpcmProductCardMap.oppcm_opcar_version,
             OpcmProductCardMap.oppcm_foil,
         ).all()
     )
@@ -226,8 +225,8 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
             candidates.extend(cards_by_norm.get(n, []))
         seen = set()
         candidates = [c for c in candidates
-                      if (c.opcar_opset_id, c.opcar_id) not in seen
-                      and not seen.add((c.opcar_opset_id, c.opcar_id))]
+                      if (c.opcar_opset_id, c.opcar_id, c.opcar_version) not in seen
+                      and not seen.add((c.opcar_opset_id, c.opcar_id, c.opcar_version))]
 
         if not candidates:
             no_candidates += len(prods)
@@ -250,6 +249,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
                 existing_map = OpcmProductCardMap.query.filter_by(
                     oppcm_opset_id=card.opcar_opset_id,
                     oppcm_opcar_id=card.opcar_id,
+                    oppcm_opcar_version=card.opcar_version,
                     oppcm_foil=foil,
                 ).first()
                 if existing_map and existing_map.oppcm_id_product != prod.opprd_id_product:
@@ -262,6 +262,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
                     oppcm_id_product=prod.opprd_id_product,
                     oppcm_opset_id=card.opcar_opset_id,
                     oppcm_opcar_id=card.opcar_id,
+                    oppcm_opcar_version=card.opcar_version,
                     oppcm_foil=foil,
                     oppcm_match_type='auto',
                     oppcm_confidence=0.7,
@@ -274,6 +275,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
                 'price': prices.get(prod.opprd_id_product, 0.0),
                 'rbset_id': card.opcar_opset_id,
                 'rbcar_id': card.opcar_id,
+                'rbcar_version': card.opcar_version,
                 'rbcar_name': card.opcar_name,
                 'rbpcm_foil': foil,
                 'rbcar_rarity': card.opcar_rarity,

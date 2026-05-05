@@ -272,6 +272,7 @@
                 <div class="entry-form-grid entry-form-grid--3">
                     <div class="entry-form-field"><label class="entry-form-label">Set ID *</label><input type="text" id="cf_rbcar_rbset_id" class="entry-form-input" placeholder="OP-01, EB-04..."></div>
                     <div class="entry-form-field"><label class="entry-form-label">Card ID *</label><input type="text" id="cf_rbcar_id" class="entry-form-input" placeholder="001, 50a..."></div>
+                    <div class="entry-form-field"><label class="entry-form-label">Version</label><input type="text" id="cf_rbcar_version" class="entry-form-input" value="p0" placeholder="p0, p1, r1"></div>
                     <div class="entry-form-field"><label class="entry-form-label">Nombre *</label><input type="text" id="cf_rbcar_name" class="entry-form-input"></div>
                     <div class="entry-form-field"><label class="entry-form-label">Categoria</label><input type="text" id="cf_opcar_category" class="entry-form-input" placeholder="LEADER, CHARACTER..."></div>
                     <div class="entry-form-field"><label class="entry-form-label">Color</label><input type="text" id="cf_opcar_color" class="entry-form-input" placeholder="Red, Blue..."></div>
@@ -327,7 +328,7 @@
                     const label = document.createElement('label');
                     label.className = 'set-checkbox';
                     label.innerHTML = `
-                        <input type="checkbox" name="op_sets" value="${s.id}" data-code="${s.code || ''}" class="op-set-check" checked>
+                        <input type="checkbox" name="op_sets" value="${s.id}" data-code="${s.code || ''}" data-name="${(s.name || s.label || '').replace(/"/g, '&quot;')}" class="op-set-check" checked>
                         ${s.label || s.id} (${s.code || s.id})
                     `;
                     container.appendChild(label);
@@ -359,7 +360,7 @@
 
         const selectedSets = [];
         document.querySelectorAll('.op-set-check:checked').forEach(cb => {
-            selectedSets.push({id: cb.value, code: cb.dataset.code || null});
+            selectedSets.push({id: cb.value, code: cb.dataset.code || null, name: cb.dataset.name || null});
         });
 
         const resultSection = document.getElementById('opResultSection');
@@ -556,7 +557,10 @@
                         <td>${escapedName}</td>
                         <td style="text-align: center; font-family: monospace;">${lowPrice}</td>
                         <td><input type="text" class="map-input" id="set-${p.id_product}" placeholder="Set ID" style="width: 80px;"></td>
-                        <td><input type="text" class="map-input" id="card-${p.id_product}" placeholder="Card ID" style="width: 80px;"></td>
+                        <td>
+                            <input type="text" class="map-input" id="card-${p.id_product}" placeholder="Card ID" style="width: 80px; margin-bottom: 4px;">
+                            <input type="text" class="map-input" id="card-version-${p.id_product}" value="p0" placeholder="Version" style="width: 80px;">
+                        </td>
                         <td><input type="text" class="map-input map-search" id="search-${p.id_product}"
                             placeholder="Buscar por nombre (min 3 chars)" style="width: 200px;"
                             oninput="searchCards(this, ${p.id_product})"></td>
@@ -608,8 +612,8 @@
 
                 let html = '';
                 data.cards.forEach(c => {
-                    html += `<span class="search-result-item" onclick="selectCard(${idProduct}, '${c.rbset_id}', '${c.rbcar_id}', '${c.name.replace(/'/g, "\\'")}')">
-                        ${c.rbset_id} / ${c.rbcar_id} &mdash; ${c.name}
+                    html += `<span class="search-result-item" onclick="selectCard(${idProduct}, '${c.rbset_id}', '${c.rbcar_id}', '${c.rbcar_version || 'p0'}', '${c.name.replace(/'/g, "\\'")}')">
+                        ${c.rbset_id} / ${c.rbcar_id}${c.rbcar_version && c.rbcar_version !== 'p0' ? ' (' + c.rbcar_version + ')' : ''} &mdash; ${c.name}
                     </span>`;
                 });
 
@@ -618,9 +622,10 @@
             });
     }
 
-    function selectCard(idProduct, setId, cardId, cardName) {
+    function selectCard(idProduct, setId, cardId, cardVersion, cardName) {
         document.getElementById(`set-${idProduct}`).value = setId;
         document.getElementById(`card-${idProduct}`).value = cardId;
+        document.getElementById(`card-version-${idProduct}`).value = cardVersion || 'p0';
         document.getElementById(`search-${idProduct}`).value = cardName;
         document.getElementById(`results-${idProduct}`).style.display = 'none';
     }
@@ -630,6 +635,7 @@
     function saveMapping(idProduct) {
         const setId = document.getElementById(`set-${idProduct}`).value.trim();
         const cardId = document.getElementById(`card-${idProduct}`).value.trim();
+        const cardVersion = document.getElementById(`card-version-${idProduct}`).value.trim() || 'p0';
 
         if (!setId || !cardId) {
             alert('Set ID y Card ID son obligatorios');
@@ -640,6 +646,7 @@
             id_product: idProduct,
             rbset_id: setId,
             rbcar_id: cardId,
+            rbcar_version: cardVersion,
         };
 
         fetch('/onepiecetcg/price/cardmarket-map', {
@@ -761,7 +768,7 @@
             <p style="margin-top: 0;">${body.message || 'Conflicto de mapeo'}</p>
             <table class="review-table" style="width: 100%; font-size: 0.85rem; margin-top: 0.5rem;">
                 <tr><th style="text-align: left;">Carta</th>
-                    <td><strong>${payload.rbset_id}-${payload.rbcar_id}</strong></td></tr>
+                    <td><strong>${payload.rbset_id}-${payload.rbcar_id}${payload.rbcar_version && payload.rbcar_version !== 'p0' ? '-' + payload.rbcar_version : ''}</strong></td></tr>
                 <tr><th style="text-align: left;">idProduct nuevo</th>
                     <td>${payload.id_product}</td></tr>
                 <tr><th style="text-align: left;">idProduct ya mapeado</th>
@@ -873,7 +880,7 @@
                         <td>${escapeHtml(r.product_name || '')}</td>
                         <td style="text-align: right; font-family: monospace;">${lp}</td>
                         <td>${escapeHtml(r.rbset_id || '&mdash;')}</td>
-                        <td>${escapeHtml(r.rbcar_id || '&mdash;')}</td>
+                        <td>${escapeHtml(r.rbcar_id || '&mdash;')}${r.rbcar_version && r.rbcar_version !== 'p0' ? `<br><small>${escapeHtml(r.rbcar_version)}</small>` : ''}</td>
                         <td>${escapeHtml(r.rbcar_name || '')}</td>
                         <td style="text-align: center;">${escapeHtml(r.rbpcm_foil || '&mdash;')}</td>
                         <td>${matchBadge}</td>
@@ -1016,6 +1023,7 @@
         ['cf_rbcar_rbset_id','cf_rbcar_id','cf_rbcar_name','cf_opcar_category','cf_opcar_color','cf_opcar_rarity','cf_opcar_cost','cf_opcar_life','cf_opcar_power','cf_opcar_counter','cf_opcar_attribute','cf_opcar_type','cf_opcar_effect','cf_image_url','cf_image'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
+        document.getElementById('cf_rbcar_version').value = 'p0';
     }
 
     function closeAddEntryModal() {
@@ -1026,6 +1034,7 @@
         const payload = {
             rbcar_rbset_id: document.getElementById('cf_rbcar_rbset_id').value.trim(),
             rbcar_id: document.getElementById('cf_rbcar_id').value.trim(),
+            rbcar_version: document.getElementById('cf_rbcar_version').value.trim() || 'p0',
             rbcar_name: document.getElementById('cf_rbcar_name').value.trim(),
             opcar_category: document.getElementById('cf_opcar_category').value.trim(),
             opcar_color: document.getElementById('cf_opcar_color').value.trim(),
@@ -1054,9 +1063,11 @@
         if (idp) {
             const setInput = document.getElementById(`set-${idp}`);
             const cardInput = document.getElementById(`card-${idp}`);
+            const cardVersionInput = document.getElementById(`card-version-${idp}`);
             const searchInput = document.getElementById(`search-${idp}`);
             if (setInput) setInput.value = d.rbset_id;
             if (cardInput) cardInput.value = d.rbcar_id;
+            if (cardVersionInput) cardVersionInput.value = d.rbcar_version || 'p0';
             if (searchInput) searchInput.value = d.rbcar_name;
         }
         alert(d.status === 'created' ? 'Carta creada' : 'Carta actualizada');
@@ -1128,7 +1139,7 @@
                     <td>${s.id_product}</td>
                     <td>${escapeHtml(s.product_name || '')}</td>
                     <td style="text-align: right; font-family: monospace;">&euro;${(s.price || 0).toFixed(2)}</td>
-                    <td><strong>${escapeHtml(s.rbset_id || '')}-${escapeHtml(s.rbcar_id || '')}</strong> ${escapeHtml(s.rbcar_name || '')}</td>
+                    <td><strong>${escapeHtml(s.rbset_id || '')}-${escapeHtml(s.rbcar_id || '')}${s.rbcar_version && s.rbcar_version !== 'p0' ? '-' + escapeHtml(s.rbcar_version) : ''}</strong> ${escapeHtml(s.rbcar_name || '')}</td>
                     <td>${escapeHtml(s.rbcar_rarity || '&mdash;')}</td>
                     <td style="text-align: center;">${escapeHtml(s.rbpcm_foil || '&mdash;')}</td>
                 </tr>
@@ -1162,6 +1173,7 @@
                     id_product: s.id_product,
                     rbset_id: s.rbset_id,
                     rbcar_id: s.rbcar_id,
+                    rbcar_version: s.rbcar_version || 'p0',
                     foil: s.rbpcm_foil || null,
                 });
             }

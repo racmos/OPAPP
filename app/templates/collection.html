@@ -86,6 +86,10 @@
             <input type="text" id="add_card_id" required placeholder="e.g. OP01-001">
         </div>
         <div class="form-group" style="margin-bottom: 0;">
+            <label for="add_card_version">Version</label>
+            <input type="text" id="add_card_version" value="p0" placeholder="p0, p1, r1">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
             <label for="add_foil">Foil</label>
             <select id="add_foil">
                 <option value="N">Normal</option>
@@ -148,7 +152,7 @@
         {% set card = entry.card %}
         <tr id="col-row-{{ col.opcol_id }}">
             <td>{{ col.opcol_opset_id }}</td>
-            <td>{{ col.opcol_opcar_id }}</td>
+            <td>{{ col.opcol_opcar_id }}{% if col.opcol_opcar_version and col.opcol_opcar_version != 'p0' %} <small>({{ col.opcol_opcar_version }})</small>{% endif %}</td>
             <td>
                 {{ card.opcar_name }}
                 {% if card.opcar_color %}
@@ -234,6 +238,7 @@ async function addToCollection(event) {
     const body = {
         opcol_opset_id: document.getElementById('add_set').value,
         opcol_opcar_id: document.getElementById('add_card_id').value.trim(),
+        opcol_opcar_version: document.getElementById('add_card_version').value.trim() || 'p0',
         opcol_foil: document.getElementById('add_foil').value,
         opcol_quantity: parseInt(document.getElementById('add_quantity').value) || 1,
         opcol_condition: document.getElementById('add_condition').value || null,

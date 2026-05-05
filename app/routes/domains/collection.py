@@ -27,12 +27,13 @@ def _null_safe_eq(col, val):
     return col == val
 
 
-def _find_exact_duplicate(user, rbset_id, rbcar_id, foil, selling, sell_price, condition, language):
+def _find_exact_duplicate(user, rbset_id, rbcar_id, rbcar_version, foil, selling, sell_price, condition, language):
     """Find exact duplicate row in collection (8-field NULL-safe match)."""
     return OpCollection.query.filter(
         OpCollection.opcol_user == user,
         OpCollection.opcol_opset_id == rbset_id,
         OpCollection.opcol_opcar_id == rbcar_id,
+        OpCollection.opcol_opcar_version == rbcar_version,
         OpCollection.opcol_foil == foil,
         OpCollection.opcol_selling == selling,
         _null_safe_eq(OpCollection.opcol_sell_price, sell_price),
@@ -57,7 +58,8 @@ def collection():
     query = db.session.query(OpCollection, OpCard).join(
         OpCard,
         (OpCollection.opcol_opset_id == OpCard.opcar_opset_id) &
-        (OpCollection.opcol_opcar_id == OpCard.opcar_id)
+        (OpCollection.opcol_opcar_id == OpCard.opcar_id) &
+        (OpCollection.opcol_opcar_version == OpCard.opcar_version)
     ).filter(OpCollection.opcol_user == current_user.username)
 
     if search_set:
@@ -73,7 +75,11 @@ def collection():
     if search_rarity:
         query = query.filter(OpCard.opcar_rarity.ilike(f'%{search_rarity}%'))
 
-    query = query.order_by(OpCollection.opcol_opset_id, OpCollection.opcol_opcar_id)
+    query = query.order_by(
+        OpCollection.opcol_opset_id,
+        OpCollection.opcol_opcar_id,
+        OpCollection.opcol_opcar_version,
+    )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     collections_data = [
@@ -104,7 +110,9 @@ def add_collection():
     data = request.validated_data
 
     card = OpCard.query.filter_by(
-        opcar_opset_id=data.opcol_opset_id, opcar_id=data.opcol_opcar_id
+        opcar_opset_id=data.opcol_opset_id,
+        opcar_id=data.opcol_opcar_id,
+        opcar_version=data.opcol_opcar_version,
     ).first()
     if not card:
         return jsonify({'success': False, 'message': 'Card does not exist'}), 400
@@ -116,6 +124,7 @@ def add_collection():
         user=current_user.username,
         rbset_id=data.opcol_opset_id,
         rbcar_id=data.opcol_opcar_id,
+        rbcar_version=data.opcol_opcar_version,
         foil=data.opcol_foil,
         selling=selling,
         sell_price=data.opcol_sell_price,
@@ -132,6 +141,7 @@ def add_collection():
     new_row = OpCollection(
         opcol_opset_id=data.opcol_opset_id,
         opcol_opcar_id=data.opcol_opcar_id,
+        opcol_opcar_version=data.opcol_opcar_version,
         opcol_foil=data.opcol_foil,
         opcol_quantity=str(data.opcol_quantity),
         opcol_selling=selling,

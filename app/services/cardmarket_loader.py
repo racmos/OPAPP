@@ -323,6 +323,7 @@ class CardmarketLoader:
                     oppcm_id_product=product.opprd_id_product,
                     oppcm_opset_id=matches[0].opcar_opset_id,
                     oppcm_opcar_id=matches[0].opcar_id,
+                    oppcm_opcar_version=matches[0].opcar_version,
                     oppcm_match_type='auto',
                     oppcm_confidence=1.0,
                 ))

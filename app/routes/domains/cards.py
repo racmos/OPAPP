@@ -36,7 +36,7 @@ def cards():
     if search_rarity:
         query = query.filter(OpCard.opcar_rarity.ilike(f'%{search_rarity}%'))
 
-    query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id)
+    query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     sets = OpSet.query.order_by(OpSet.opset_id).all()
@@ -77,13 +77,14 @@ def search_cards():
             OpCard.opcar_name.ilike(like),
             OpCard.opcar_id.ilike(like)
         )
-    ).order_by(OpCard.opcar_opset_id, OpCard.opcar_id).limit(limit).all()
+    ).order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version).limit(limit).all()
 
     return jsonify({
         'success': True,
         'cards': [{
             'set_id': c.opcar_opset_id,
             'card_id': c.opcar_id,
+            'card_version': c.opcar_version,
             'name': c.opcar_name,
             'rarity': c.opcar_rarity,
             'color': c.opcar_color,

@@ -133,6 +133,7 @@ class CollectionAdd(BaseModel):
     """Schema for adding a card to collection."""
     opcol_opset_id: str = Field(..., min_length=1, description="Set ID")
     opcol_opcar_id: str = Field(..., min_length=1, description="Card ID")
+    opcol_opcar_version: str = Field('p0', min_length=1, description="Card version")
     opcol_foil: str = Field('N', description="Foil flag (N/Y/S)")
     opcol_quantity: int = Field(1, ge=0, description="Quantity to add")
     opcol_selling: Optional[str] = Field('N', description="Is selling? (Y/N)")
@@ -158,6 +159,7 @@ class OpExtractSet(BaseModel):
     """Single set selection for extraction."""
     id: str = Field(..., description="Dropdown value ID (e.g. '569302')")
     code: Optional[str] = Field(None, description="Set code (e.g. 'PRB-02')")
+    name: Optional[str] = Field(None, description="Human set name")
 
 
 class OpExtract(BaseModel):
@@ -182,6 +184,7 @@ class AutoMatchPairing(BaseModel):
     id_product: int = Field(..., ge=1, description="Cardmarket idProduct")
     rbset_id: str = Field(..., min_length=1, description="Internal set ID")
     rbcar_id: str = Field(..., min_length=1, description="Internal card ID")
+    rbcar_version: str = Field('p0', min_length=1, description="Internal card version")
     foil: Optional[str] = Field(None, description="'N' | 'S' | null")
 
     @field_validator('foil')

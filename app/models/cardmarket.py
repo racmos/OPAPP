@@ -92,6 +92,7 @@ class OpcmProductCardMap(db.Model):
     oppcm_id_product = db.Column(db.Integer, primary_key=True)
     oppcm_opset_id = db.Column(db.Text, nullable=False)
     oppcm_opcar_id = db.Column(db.Text, nullable=False)
+    oppcm_opcar_version = db.Column(db.Text, nullable=False, default='p0')
     oppcm_foil = db.Column(db.String(1), nullable=True)          # 'N' | 'S' | NULL
     oppcm_match_type = db.Column(db.Text, default='manual')      # auto | manual
     oppcm_confidence = db.Column(db.Numeric)

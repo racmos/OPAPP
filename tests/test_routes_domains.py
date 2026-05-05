@@ -44,11 +44,12 @@ def _seed_set(app, set_id='OP01', set_name='Romance Dawn',
 
 def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
                category='Leader', color='Red', rarity='Leader',
-               cost=1, image='OP01-001.png'):
+               cost=1, image='OP01-001.png', version='p0'):
     """Seed a test card into the database."""
     c = OpCard(
         opcar_opset_id=set_id,
         opcar_id=card_id,
+        opcar_version=version,
         opcar_name=name,
         opcar_category=category,
         opcar_color=color,
@@ -300,10 +301,36 @@ class TestCollectionRoutes:
             col = OpCollection.query.filter_by(
                 opcol_user='coluser',
                 opcol_opset_id='OP01',
-                opcol_opcar_id='OP01-001'
+                opcol_opcar_id='OP01-001',
+                opcol_opcar_version='p0'
             ).first()
             assert col is not None
             assert col.opcol_quantity == '4'
+
+    def test_collection_add_variant_card_uses_version(self, app, client):
+        """Collection rows can target a specific card version."""
+        with app.app_context():
+            _login(client, username='variantuser')
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy Alt', version='p1')
+        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
+            'opcol_opset_id': 'OP01',
+            'opcol_opcar_id': 'OP01-001',
+            'opcol_opcar_version': 'p1',
+            'opcol_foil': 'N',
+            'opcol_quantity': 1
+        }), content_type='application/json')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        with app.app_context():
+            col = OpCollection.query.filter_by(
+                opcol_user='variantuser',
+                opcol_opset_id='OP01',
+                opcol_opcar_id='OP01-001',
+                opcol_opcar_version='p1'
+            ).first()
+            assert col is not None
 
     def test_collection_add_nonexistent_card_rejects(self, app, client):
         """Adding non-existent card returns error."""

@@ -11,6 +11,7 @@ class OpCollection(db.Model):
     opcol_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     opcol_opset_id = db.Column(db.Text, nullable=False)
     opcol_opcar_id = db.Column(db.Text, nullable=False)
+    opcol_opcar_version = db.Column(db.Text, nullable=False, default='p0')
     opcol_foil = db.Column(db.Text, nullable=False, default='N')
     opcol_user = db.Column(db.String(64), nullable=False)
     opcol_quantity = db.Column(db.Text, nullable=False)

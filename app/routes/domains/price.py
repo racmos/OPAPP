@@ -51,7 +51,7 @@ def extract_op_cards():
     data = request.validated_data
     filter_sets = None
     if data.sets:
-        filter_sets = [{'id': s.id, 'code': s.code} for s in data.sets]
+        filter_sets = [{'id': s.id, 'code': s.code, 'name': s.name} for s in data.sets]
     try:
         result = _extract(filter_sets=filter_sets)
         return jsonify(result)
@@ -164,6 +164,7 @@ def cardmarket_search_cards():
         'cards': [{
             'rbset_id': c.opcar_opset_id,
             'rbcar_id': c.opcar_id,
+            'rbcar_version': c.opcar_version,
             'name': c.opcar_name,
         } for c in cards]
     })
@@ -184,19 +185,29 @@ def cardmarket_map():
     id_product = data.get('id_product')
     rbset_id = data.get('rbset_id')
     rbcar_id = data.get('rbcar_id')
+    rbcar_version = (data.get('rbcar_version') or 'p0').strip()
     foil = data.get('rbpcm_foil') or data.get('foil')
     if foil not in (None, 'N', 'S', ''):
         return jsonify({'success': False, 'message': "foil must be 'N', 'S' or empty"}), 400
     if foil == '':
         foil = None
 
-    if not all([id_product, rbset_id, rbcar_id]):
+    if not all([id_product, rbset_id, rbcar_id, rbcar_version]):
         return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+    card = OpCard.query.filter_by(
+        opcar_opset_id=rbset_id,
+        opcar_id=rbcar_id,
+        opcar_version=rbcar_version,
+    ).first()
+    if not card:
+        return jsonify({'success': False, 'message': 'Card does not exist'}), 400
 
     # Check for conflict: (rbset_id, rbcar_id, foil) already mapped to another product
     conflict_query = OpcmProductCardMap.query.filter(
         OpcmProductCardMap.oppcm_opset_id == rbset_id,
         OpcmProductCardMap.oppcm_opcar_id == rbcar_id,
+        OpcmProductCardMap.oppcm_opcar_version == rbcar_version,
         OpcmProductCardMap.oppcm_id_product != id_product,
     )
     if foil is None:
@@ -209,7 +220,7 @@ def cardmarket_map():
         return jsonify({
             'success': False,
             'message': (
-                f'Card {rbset_id}-{rbcar_id} already mapped to idProduct '
+                f'Card {rbset_id}-{rbcar_id}-{rbcar_version} already mapped to idProduct '
                 f'{conflict.oppcm_id_product}.'
             ),
             'conflict_id_product': conflict.oppcm_id_product,
@@ -222,6 +233,7 @@ def cardmarket_map():
     if existing:
         existing.oppcm_opset_id = rbset_id
         existing.oppcm_opcar_id = rbcar_id
+        existing.oppcm_opcar_version = rbcar_version
         existing.oppcm_foil = foil
         existing.oppcm_match_type = 'manual'
         existing.oppcm_confidence = 1.0
@@ -230,6 +242,7 @@ def cardmarket_map():
             oppcm_id_product=id_product,
             oppcm_opset_id=rbset_id,
             oppcm_opcar_id=rbcar_id,
+            oppcm_opcar_version=rbcar_version,
             oppcm_foil=foil,
             oppcm_match_type='manual',
             oppcm_confidence=1.0,
@@ -247,6 +260,7 @@ def cardmarket_unmap():
     id_product = data.get('id_product')
     rbset_id = (data.get('rbset_id') or '').strip()
     rbcar_id = (data.get('rbcar_id') or '').strip()
+    rbcar_version = (data.get('rbcar_version') or '').strip()
     foil = data.get('foil') or data.get('rbpcm_foil')
 
     if id_product:
@@ -257,8 +271,11 @@ def cardmarket_unmap():
         deleted = OpcmProductCardMap.query.filter_by(oppcm_id_product=id_product).delete()
     elif rbset_id and rbcar_id:
         q = OpcmProductCardMap.query.filter_by(
-            oppcm_opset_id=rbset_id, oppcm_opcar_id=rbcar_id
+            oppcm_opset_id=rbset_id,
+            oppcm_opcar_id=rbcar_id,
         )
+        if rbcar_version:
+            q = q.filter(OpcmProductCardMap.oppcm_opcar_version == rbcar_version)
         if foil in ('N', 'S'):
             q = q.filter(OpcmProductCardMap.oppcm_foil == foil)
         deleted = q.delete()
@@ -318,7 +335,7 @@ def cardmarket_mappings():
         for m in OpcmProductCardMap.query.all()
     }
     cards_idx = {
-        (c.opcar_opset_id, c.opcar_id): c
+        (c.opcar_opset_id, c.opcar_id, c.opcar_version): c
         for c in OpCard.query.all()
     }
 
@@ -337,9 +354,10 @@ def cardmarket_mappings():
 
         rbset_id = m.oppcm_opset_id if m else None
         rbcar_id = m.oppcm_opcar_id if m else None
+        rbcar_version = m.oppcm_opcar_version if m else None
         foil_val = m.oppcm_foil if m else None
         match_type = m.oppcm_match_type if m else None
-        card = cards_idx.get((rbset_id, rbcar_id)) if rbset_id and rbcar_id else None
+        card = cards_idx.get((rbset_id, rbcar_id, rbcar_version)) if rbset_id and rbcar_id and rbcar_version else None
         card_name = card.opcar_name if card else None
 
         if is_mapped and q_card_l:
@@ -360,6 +378,7 @@ def cardmarket_mappings():
             'low_price': low_lookup.get(p.opprd_id_product),
             'rbset_id': rbset_id,
             'rbcar_id': rbcar_id,
+            'rbcar_version': rbcar_version,
             'rbcar_name': card_name,
             'rbpcm_foil': foil_val,
             'match_type': match_type,
@@ -586,6 +605,7 @@ def auto_match_apply():
             oppcm_id_product=pairing.id_product,
             oppcm_opset_id=pairing.rbset_id,
             oppcm_opcar_id=pairing.rbcar_id,
+            oppcm_opcar_version=pairing.rbcar_version,
             oppcm_foil=pairing.foil,
             oppcm_match_type='auto',
             oppcm_confidence=0.7,
@@ -607,6 +627,7 @@ def add_entry():
     data = request.get_json() or {}
     rbset_id = (data.get('rbcar_rbset_id') or '').strip()
     rbcar_id = (data.get('rbcar_id') or '').strip()
+    rbcar_version = (data.get('rbcar_version') or 'p0').strip()
     rbcar_name = (data.get('rbcar_name') or '').strip()
 
     if not rbset_id or not rbcar_id or not rbcar_name:
@@ -622,13 +643,16 @@ def add_entry():
         }), 400
 
     existing = OpCard.query.filter_by(
-        opcar_opset_id=rbset_id, opcar_id=rbcar_id
+        opcar_opset_id=rbset_id, opcar_id=rbcar_id, opcar_version=rbcar_version
     ).first()
     status = 'updated' if existing else 'created'
 
     if not existing:
         existing = OpCard(
-            opcar_opset_id=rbset_id, opcar_id=rbcar_id, opcar_name=rbcar_name
+            opcar_opset_id=rbset_id,
+            opcar_id=rbcar_id,
+            opcar_version=rbcar_version,
+            opcar_name=rbcar_name,
         )
         db.session.add(existing)
 
@@ -648,5 +672,6 @@ def add_entry():
         'status': status,
         'rbset_id': rbset_id,
         'rbcar_id': rbcar_id,
+        'rbcar_version': existing.opcar_version,
         'rbcar_name': existing.opcar_name,
     })

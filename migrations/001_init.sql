@@ -56,6 +56,7 @@ DROP TABLE IF EXISTS onepiecetcg.opcards CASCADE;
 CREATE TABLE onepiecetcg.opcards (
     opcar_opset_id VARCHAR(20) NOT NULL REFERENCES onepiecetcg.opsets(opset_id),
     opcar_id VARCHAR(20) NOT NULL,
+    opcar_version VARCHAR(10) NOT NULL DEFAULT 'p0',
     opcar_name VARCHAR(200) NOT NULL,
     opcar_category VARCHAR(50),
     opcar_color VARCHAR(50),
@@ -68,12 +69,10 @@ CREATE TABLE onepiecetcg.opcards (
     opcar_type TEXT,
     opcar_effect TEXT,
     opcar_block_icon SMALLINT,
-    opcar_illustration_type TEXT,
-    opcar_artist VARCHAR(100),
-    opcar_banned VARCHAR(1) DEFAULT 'N',
+    opcar_banned TEXT,
     image_url TEXT,
     image TEXT,
-    PRIMARY KEY (opcar_opset_id, opcar_id),
+    PRIMARY KEY (opcar_opset_id, opcar_id, opcar_version),
     CONSTRAINT fk_opcards_set FOREIGN KEY (opcar_opset_id) REFERENCES onepiecetcg.opsets(opset_id)
 );
 
@@ -82,7 +81,8 @@ CREATE INDEX idx_opcards_name ON onepiecetcg.opcards (opcar_name);
 
 COMMENT ON TABLE onepiecetcg.opcards IS 'Catalogo de cartas One Piece TCG';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_opset_id IS 'FK al set al que pertenece la carta';
-COMMENT ON COLUMN onepiecetcg.opcards.opcar_id IS 'Identificador unico de la carta dentro del set';
+COMMENT ON COLUMN onepiecetcg.opcards.opcar_id IS 'Identificador base de la carta dentro del set';
+COMMENT ON COLUMN onepiecetcg.opcards.opcar_version IS 'Version de la carta: p0 base, p1/p2 parallel, r1 reprint, etc.';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_name IS 'Nombre de la carta';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_category IS 'Categoria de carta (Leader, Character, Event, Stage, DON!!)';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_color IS 'Color(es) de la carta (Red, Green, Blue, Purple, Black, Yellow)';
@@ -94,10 +94,8 @@ COMMENT ON COLUMN onepiecetcg.opcards.opcar_counter IS 'Valor de counter de la c
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_attribute IS 'Atributos de la carta (Slash, Strike, Special, Wisdom, Ranged)';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_type IS 'Tipos de la carta (Straw Hat Crew, Navy, etc.)';
 COMMENT ON COLUMN onepiecetcg.opcards.opcar_effect IS 'Texto del efecto de la carta';
-COMMENT ON COLUMN onepiecetcg.opcards.opcar_block_icon IS 'Icono de bloqueo (0/1)';
-COMMENT ON COLUMN onepiecetcg.opcards.opcar_illustration_type IS 'Tipo de ilustracion (Normal, Alternate Art, Parallel, etc.)';
-COMMENT ON COLUMN onepiecetcg.opcards.opcar_artist IS 'Artista que creo la ilustracion';
-COMMENT ON COLUMN onepiecetcg.opcards.opcar_banned IS 'Si la carta esta baneada (S/N)';
+COMMENT ON COLUMN onepiecetcg.opcards.opcar_block_icon IS 'Numero de block icon mostrado por la carta';
+COMMENT ON COLUMN onepiecetcg.opcards.opcar_banned IS 'IDs de cartas involucradas en el baneo; si es individual almacena su propio opcar_id';
 COMMENT ON COLUMN onepiecetcg.opcards.image_url IS 'URL de la imagen de la carta';
 COMMENT ON COLUMN onepiecetcg.opcards.image IS 'Nombre del archivo de imagen';
 
@@ -111,6 +109,7 @@ CREATE TABLE onepiecetcg.opcollection (
     opcol_id SERIAL PRIMARY KEY,
     opcol_opset_id VARCHAR(20) NOT NULL,
     opcol_opcar_id VARCHAR(20) NOT NULL,
+    opcol_opcar_version VARCHAR(10) NOT NULL DEFAULT 'p0',
     opcol_foil VARCHAR(1) DEFAULT 'N',
     opcol_user VARCHAR(80) NOT NULL,
     opcol_quantity VARCHAR(20) NOT NULL,
@@ -120,18 +119,19 @@ CREATE TABLE onepiecetcg.opcollection (
     opcol_condition VARCHAR(8),
     opcol_language VARCHAR(40),
     opcol_chadat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_collection_card FOREIGN KEY (opcol_opset_id, opcol_opcar_id) 
-        REFERENCES onepiecetcg.opcards(opcar_opset_id, opcar_id),
+    CONSTRAINT fk_collection_card FOREIGN KEY (opcol_opset_id, opcol_opcar_id, opcol_opcar_version) 
+        REFERENCES onepiecetcg.opcards(opcar_opset_id, opcar_id, opcar_version),
     CONSTRAINT fk_collection_user FOREIGN KEY (opcol_user) REFERENCES onepiecetcg.opusers(username)
 );
 
 CREATE INDEX idx_opcollection_user ON onepiecetcg.opcollection (opcol_user);
-CREATE INDEX idx_opcollection_set_card ON onepiecetcg.opcollection (opcol_opset_id, opcol_opcar_id);
+CREATE INDEX idx_opcollection_set_card ON onepiecetcg.opcollection (opcol_opset_id, opcol_opcar_id, opcol_opcar_version);
 
 COMMENT ON TABLE onepiecetcg.opcollection IS 'Coleccion personal de cada usuario';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_id IS 'Identificador unico autoincremental';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_opset_id IS 'FK al set de la carta';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_opcar_id IS 'FK al ID de la carta';
+COMMENT ON COLUMN onepiecetcg.opcollection.opcol_opcar_version IS 'FK a la version especifica de la carta';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_foil IS 'Si la carta es foil (S/N)';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_quantity IS 'Cantidad de copias de la carta';
 COMMENT ON COLUMN onepiecetcg.opcollection.opcol_selling IS 'Si esta en venta (S/N)';
@@ -301,12 +301,16 @@ CREATE TABLE onepiecetcg.opcm_product_card_map (
     oppcm_id_product INTEGER PRIMARY KEY,
     oppcm_opset_id TEXT NOT NULL,
     oppcm_opcar_id TEXT NOT NULL,
+    oppcm_opcar_version TEXT NOT NULL DEFAULT 'p0',
     oppcm_foil VARCHAR(1),
     oppcm_match_type TEXT DEFAULT 'manual',
-    oppcm_confidence NUMERIC
+    oppcm_confidence NUMERIC,
+    CONSTRAINT fk_opcm_map_card FOREIGN KEY (oppcm_opset_id, oppcm_opcar_id, oppcm_opcar_version)
+        REFERENCES onepiecetcg.opcards(opcar_opset_id, opcar_id, opcar_version)
 );
 
 COMMENT ON TABLE onepiecetcg.opcm_product_card_map IS 'Mapea idProduct Cardmarket a cartas internas';
+COMMENT ON COLUMN onepiecetcg.opcm_product_card_map.oppcm_opcar_version IS 'Version de carta mapeada: p0 base, p1/p2 parallel, r1 reprint, etc.';
 COMMENT ON COLUMN onepiecetcg.opcm_product_card_map.oppcm_foil IS 'N=normal, S=foil, NULL=sin foil fisico';
 COMMENT ON COLUMN onepiecetcg.opcm_product_card_map.oppcm_match_type IS 'auto | manual';
 

@@ -41,9 +41,24 @@ def _get_session() -> requests.Session:
 
 def _parse_set_code_from_label(label: str) -> str:
     """Extract set code from a label like 'ROMANCE DAWN [OP-01]' -> 'OP-01'."""
+    special = {
+        'Promotion card': 'P',
+        'Other Product Card': 'OPC',
+    }
+    if label in special:
+        return special[label]
     m = re.search(r'\[([^\]]+)\]', label)
     if m:
         return m.group(1)
+    return label
+
+
+def _normalize_set_name(code: str, label: str) -> str:
+    """Normalize special set names requested by user."""
+    if code == 'P':
+        return 'Promo Cards'
+    if code == 'OPC':
+        return 'Other / Miscellaneous'
     return label
 
 
@@ -73,6 +88,20 @@ def _safe_int(value: str) -> Optional[int]:
         return None
 
 
+def _split_card_id_version(card_id_full: str) -> tuple[str, str]:
+    """Split site card IDs into base id + version.
+
+    Examples:
+        OP07-076 -> (OP07-076, p0)
+        OP07-076_p1 -> (OP07-076, p1)
+        OP07-076_r1 -> (OP07-076, r1)
+    """
+    match = re.match(r'^(?P<base>.+?)(?:_(?P<version>[a-z]+\d+))?$', card_id_full)
+    if not match:
+        return card_id_full, 'p0'
+    return match.group('base'), (match.group('version') or 'p0')
+
+
 def _parse_card_dl(dl_element, set_id: str, value_id: str,
                    set_code_override: Optional[str] = None) -> Optional[dict]:
     """Parse a <dl class='modalCol'> element into a card dict.
@@ -90,10 +119,7 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
     if not card_id_full:
         return None
 
-    # Detect variant — handles _p1 (parallel), _r1 (reprint), etc.
-    variant_match = re.search(r'(_[a-z]+\d+)$', card_id_full)
-    variant_suffix = variant_match.group(1) if variant_match else ''
-    base_card_id = re.sub(r'_[a-z]+\d+$', '', card_id_full)
+    base_card_id, opcar_version = _split_card_id_version(card_id_full)
 
     # Parse the parts of card_id: supports multiple formats
     # Format 1: "OP01-001" (letters+digits-digits) — most cards
@@ -196,7 +222,8 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
         block_text = block_el.get_text(separator=' ', strip=True)
         h3 = block_el.find('h3')
         if h3:
-            block_text = block_text.replace(h3.get_text(strip=True), '', 1).strip()
+            label = ' '.join(h3.stripped_strings)
+            block_text = re.sub(rf'^{re.escape(label)}\s*', '', block_text).strip()
         block_icon = _safe_int(block_text)
 
     # Type
@@ -237,9 +264,8 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
     # e.g., "001" for normal, "001_p1" for variant
     return {
         'opcar_opset_id': opset_id,
-        # Keep full site card ID to preserve uniqueness inside reprint sets
-        # like PRB-02 where cards from many original sets coexist.
-        'opcar_id': card_id_full,
+        'opcar_id': base_card_id,
+        'opcar_version': opcar_version,
         'opcar_name': name,
         'opcar_category': category,
         'opcar_rarity': rarity,
@@ -300,11 +326,13 @@ def refresh_op_sets() -> dict:
                 continue
             label = option.get_text(strip=True)
             code = _parse_set_code_from_label(label)
+            normalized_name = _normalize_set_name(code, label)
 
             sets.append({
                 'id': value,
                 'label': label,
                 'code': code,
+                'name': normalized_name,
             })
 
         return {
@@ -367,12 +395,14 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
         steps.append({'step': '1. Selected sets', 'status': 'INFO', 'message': f'{len(filter_sets)} sets selected'})
 
     all_cards = []
+    set_summaries: dict[str, dict[str, object]] = {}
     step_idx = 2
 
     # Step 2: Fetch cards for each set
     for set_info in filter_sets:
         value_id = set_info['id'] if isinstance(set_info, dict) else set_info
         set_code = set_info.get('code') if isinstance(set_info, dict) else None
+        set_name = set_info.get('name') if isinstance(set_info, dict) else None
         step_label = f'{step_idx}. Fetch {set_code or value_id}'
         steps.append({'step': step_label, 'status': 'RUNNING', 'message': f'Fetching cards for {set_code or value_id}...'})
         try:
@@ -404,6 +434,12 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
                 all_cards.append(card_data)
                 set_cards += 1
 
+            effective_code = set_code or value_id
+            set_summaries[effective_code] = {
+                'name': _normalize_set_name(effective_code, set_name or effective_code),
+                'ncard': set_cards,
+            }
+
             # Get expected count from page
             count_el = soup.select_one('.countCol')
             expected = count_el.get_text(strip=True) if count_el else '?'
@@ -430,12 +466,19 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
             opset_id = c['opcar_opset_id']
             if opset_id not in unique_sets:
                 existing = OpSet.query.filter_by(opset_id=opset_id).first()
+                summary = set_summaries.get(opset_id, {})
+                set_name = summary.get('name', opset_id)
+                set_ncard = summary.get('ncard')
                 if not existing:
                     db.session.add(OpSet(
                         opset_id=opset_id,
-                        opset_name=opset_id,
+                        opset_name=set_name,
+                        opset_ncard=set_ncard,
                     ))
                     stats['sets_created'] += 1
+                else:
+                    existing.opset_name = set_name
+                    existing.opset_ncard = set_ncard
                 unique_sets.add(opset_id)
         db.session.commit()
         steps[-1]['status'] = 'SUCCESS'
@@ -489,13 +532,13 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
             existing = OpCard.query.filter_by(
                 opcar_opset_id=card_data['opcar_opset_id'],
                 opcar_id=card_data['opcar_id'],
-                image=card_data['image'],
+                opcar_version=card_data['opcar_version'],
             ).first()
 
             if existing:
                 changed = False
                 for key, val in card_data.items():
-                    if key in ('opcar_opset_id', 'opcar_id', 'image'):
+                    if key in ('opcar_opset_id', 'opcar_id', 'opcar_version'):
                         continue
                     if getattr(existing, key, None) != val:
                         setattr(existing, key, val)
@@ -508,6 +551,7 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
                 new_card = OpCard(
                     opcar_opset_id=card_data['opcar_opset_id'],
                     opcar_id=card_data['opcar_id'],
+                    opcar_version=card_data['opcar_version'],
                     opcar_name=card_data['opcar_name'],
                     opcar_category=card_data['opcar_category'],
                     opcar_rarity=card_data['opcar_rarity'],

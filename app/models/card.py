@@ -32,6 +32,7 @@ class OpCard(db.Model):
 
     opcar_opset_id = db.Column(db.Text, primary_key=True)
     opcar_id = db.Column(db.Text, primary_key=True)
+    opcar_version = db.Column(db.Text, primary_key=True, default='p0')
     opcar_name = db.Column(db.Text, nullable=False)
     opcar_category = db.Column(db.Text)
     opcar_color = db.Column(db.Text)
@@ -44,20 +45,18 @@ class OpCard(db.Model):
     opcar_type = db.Column(db.Text)
     opcar_effect = db.Column(db.Text)
     opcar_block_icon = db.Column(db.SmallInteger)
-    opcar_illustration_type = db.Column(db.Text)
-    opcar_artist = db.Column(db.Text)
-    opcar_banned = db.Column(db.Text, default='N')
+    opcar_banned = db.Column(db.Text)
     image_url = db.Column(db.Text)
     image = db.Column(db.Text)
 
+    def __init__(self, **kwargs):
+        kwargs.setdefault('opcar_version', 'p0')
+        super().__init__(**kwargs)
+
     @property
     def image_src(self):
-        """Full image URL path derived from the image filename.
-
-        Uses the set_prefix embedded in the filename (e.g. op01_001.png -> op01/)
-        instead of opcar_opset_id (which would give the wrong folder for promo sets).
-        """
+        """Full image URL path derived from selected set ownership folder."""
         if not self.image:
             return None
-        folder = _image_folder(self.image)
+        folder = (self.opcar_opset_id or '').lower()
         return f"/onepiecetcg/static/images/cards/{folder}/{self.image}"
