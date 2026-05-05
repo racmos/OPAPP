@@ -299,7 +299,7 @@ class TestOnepieceScraper:
         
         # Verify card in DB — opset_id is derived as OP-01 (with hyphen)
         with app.app_context():
-            card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001').first()
+            card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001').first()
             assert card is not None
             assert card.opcar_name == 'Monkey D. Luffy'
             assert card.opcar_category == 'LEADER'
@@ -329,7 +329,7 @@ class TestOnepieceScraper:
 
         # Verify Zoro (Character with Cost) — opset_id is OP-01
         with app.app_context():
-            card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='002').first()
+            card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-002').first()
             assert card is not None
             assert card.opcar_name == 'Roronoa Zoro'
             assert card.opcar_category == 'CHARACTER'
@@ -353,13 +353,13 @@ class TestOnepieceScraper:
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
 
-        # Verify both normal (001) and variant (001_p1) exist
+        # Verify both normal (OP01-001) and variant (OP01-001_p1) exist
         with app.app_context():
-            normal = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001').first()
+            normal = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001').first()
             assert normal is not None
             assert 'OP01-001.png' in normal.image
             
-            variant = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001_p1').first()
+            variant = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001_p1').first()
             assert variant is not None
             assert '_p1' in variant.image
 
@@ -376,9 +376,9 @@ class TestOnepieceScraper:
             with patch('app.services.onepiece_scraper._get_session', return_value=mock_session):
                 extract_op_cards(filter_sets=['OP01'])
 
-        # Verify reprint variant (001_r1) exists
+        # Verify reprint variant (OP01-001_r1) exists
         with app.app_context():
-            reprint = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='001_r1').first()
+            reprint = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001_r1').first()
             assert reprint is not None
             assert '_r1' in reprint.image
             assert reprint.opcar_name == 'Monkey D. Luffy'

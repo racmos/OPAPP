@@ -237,7 +237,9 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
     # e.g., "001" for normal, "001_p1" for variant
     return {
         'opcar_opset_id': opset_id,
-        'opcar_id': base_card_id.replace(card_id_prefix + '-', '') + variant_suffix,
+        # Keep full site card ID to preserve uniqueness inside reprint sets
+        # like PRB-02 where cards from many original sets coexist.
+        'opcar_id': card_id_full,
         'opcar_name': name,
         'opcar_category': category,
         'opcar_rarity': rarity,
