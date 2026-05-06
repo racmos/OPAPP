@@ -1,0 +1,42 @@
+# Ruff linter + formatter configuration
+# Docs: https://docs.astral.sh/ruff/configuration/
+
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "S",     # flake8-bandit (security)
+    "T20",   # flake8-print
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "S101",   # assert in tests is fine
+    "S104",   # bind 0.0.0.0 — intentional in dev/docker
+    "S105",   # hardcoded passwords — false positives on config defaults
+    "S106",   # same as above
+    "S107",   # hardcoded password in function default — Flask config pattern
+    "E501",   # line length handled by formatter
+    "B008",   # function call in default arg — Flask patterns use this
+    "RUF012", # mutable class default — SQLAlchemy models use this pattern
+    "UP045",  # Optional[X] -> X | None — keep explicit for readability
+    "SIM102", # collapsible if — sometimes nested is clearer
+    "SIM108", # ternary instead of if-else — readability preference
+]
+
+[lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "T20", "F401", "F841", "N806", "B017"]
+"config.py" = ["S105"]
+"migrations/**" = ["E", "W", "F", "I", "UP"]
+
+[format]
+quote-style = "single"
+indent-style = "space"

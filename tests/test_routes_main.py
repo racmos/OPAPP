@@ -1,8 +1,11 @@
 """
 Integration tests for main routes (dashboard, root redirect) and profile route.
 """
+
 import json
+
 import pytest
+
 from app import db
 from app.models import OpUser
 
@@ -33,10 +36,11 @@ class TestMainDashboard:
             db.session.commit()
 
         # Login via JSON
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'dash@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'dash@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         # Access dashboard
         response = client.get('/onepiecetcg/dashboard')
@@ -50,10 +54,11 @@ class TestMainDashboard:
             db.session.add(user)
             db.session.commit()
 
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'dash2@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'dash2@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         response = client.get('/onepiecetcg/dashboard')
         assert response.status_code == 200
@@ -78,10 +83,11 @@ class TestProfileRoute:
             db.session.add(user)
             db.session.commit()
 
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'prof@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'prof@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         response = client.get('/onepiecetcg/profile')
         assert response.status_code == 200
@@ -94,10 +100,11 @@ class TestProfileRoute:
             db.session.add(user)
             db.session.commit()
 
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'prof2@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'prof2@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         response = client.get('/onepiecetcg/profile')
         assert response.status_code == 200

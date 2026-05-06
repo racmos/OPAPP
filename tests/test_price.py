@@ -2,54 +2,68 @@
 Phase 4 tests: Price routes, scraper service, cardmarket loader, cardmarket matcher.
 Strict TDD: Tests written BEFORE production code.
 """
-import json
-from unittest.mock import patch, MagicMock, PropertyMock
-import pytest
-from app import db
-from app.models import OpUser, OpSet, OpCard
-from app.models.cardmarket import (
-    OpcmProduct, OpcmPrice, OpcmProductCardMap, OpcmIgnored, OpcmExpansion
-)
 
+import json
+from unittest.mock import MagicMock, PropertyMock, patch
+
+import pytest
+
+from app import db
+from app.models import OpCard, OpSet, OpUser
+from app.models.cardmarket import OpcmExpansion, OpcmIgnored, OpcmPrice, OpcmProduct, OpcmProductCardMap
 
 # ============================================================
 # Helper: login user and seed data
 # ============================================================
 
-def _login(client, email='pricetest@test.com', password='test123',
-           username='pricetest'):
+
+def _login(client, email='pricetest@test.com', password='test123', username='pricetest'):
     """Helper to create user + login."""
     user = OpUser(username=username, email=email)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
 
-    client.post('/onepiecetcg/login', data=json.dumps({
-        'email': email, 'password': password
-    }), content_type='application/json')
+    client.post(
+        '/onepiecetcg/login', data=json.dumps({'email': email, 'password': password}), content_type='application/json'
+    )
     return user
 
 
-def _seed_set(app, set_id='OP01', set_name='Romance Dawn',
-              ncard=121, outdat='2022-12-02'):
+def _seed_set(app, set_id='OP01', set_name='Romance Dawn', ncard=121, outdat='2022-12-02'):
     """Seed a test set."""
     from datetime import date
+
     s = OpSet(
-        opset_id=set_id, opset_name=set_name,
+        opset_id=set_id,
+        opset_name=set_name,
         opset_ncard=ncard,
-        opset_outdat=date.fromisoformat(outdat) if outdat else None
+        opset_outdat=date.fromisoformat(outdat) if outdat else None,
     )
     db.session.add(s)
     db.session.commit()
     return s
 
 
-def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
-               category='Leader', color='Red', rarity='Leader', version='p0'):
+def _seed_card(
+    app,
+    set_id='OP01',
+    card_id='OP01-001',
+    name='Monkey D. Luffy',
+    category='Leader',
+    color='Red',
+    rarity='Leader',
+    version='p0',
+):
     """Seed a test card."""
     c = OpCard(
-        opcar_opset_id=set_id, opcar_id=card_id, opcar_version=version, opcar_name=name,
-        opcar_category=category, opcar_color=color, opcar_rarity=rarity
+        opcar_opset_id=set_id,
+        opcar_id=card_id,
+        opcar_version=version,
+        opcar_name=name,
+        opcar_category=category,
+        opcar_color=color,
+        opcar_rarity=rarity,
     )
     db.session.add(c)
     db.session.commit()
@@ -203,31 +217,61 @@ CARD_SET_HTML = """<!DOCTYPE html>
 
 # Cardmarket JSON fixtures
 PRICE_GUIDE_JSON = {
-    "priceGuides": [
-        {"idProduct": 123456, "idCategory": 1, "avg": 5.50, "low": 3.00, "trend": 5.00,
-         "avg1": 5.00, "avg7": 5.20, "avg30": 5.40,
-         "avg-foil": 12.00, "low-foil": 8.00, "trend-foil": 10.00,
-         "avg1-foil": 11.00, "avg7-foil": 11.50, "avg30-foil": 11.80,
-         "low-ex+": None},
+    'priceGuides': [
+        {
+            'idProduct': 123456,
+            'idCategory': 1,
+            'avg': 5.50,
+            'low': 3.00,
+            'trend': 5.00,
+            'avg1': 5.00,
+            'avg7': 5.20,
+            'avg30': 5.40,
+            'avg-foil': 12.00,
+            'low-foil': 8.00,
+            'trend-foil': 10.00,
+            'avg1-foil': 11.00,
+            'avg7-foil': 11.50,
+            'avg30-foil': 11.80,
+            'low-ex+': None,
+        },
     ]
 }
 
 SINGLES_JSON = {
-    "products": [
-        {"idProduct": 123456, "name": "Monkey D. Luffy (OP01-001)", "idCategory": 1,
-         "categoryName": "One Piece Single", "idExpansion": 1001,
-         "idMetacard": 5001, "dateAdded": "2024-01-01"},
-        {"idProduct": 234567, "name": "Roronoa Zoro (OP01-002)", "idCategory": 1,
-         "categoryName": "One Piece Single", "idExpansion": 1001,
-         "idMetacard": 5002, "dateAdded": "2024-01-01"},
+    'products': [
+        {
+            'idProduct': 123456,
+            'name': 'Monkey D. Luffy (OP01-001)',
+            'idCategory': 1,
+            'categoryName': 'One Piece Single',
+            'idExpansion': 1001,
+            'idMetacard': 5001,
+            'dateAdded': '2024-01-01',
+        },
+        {
+            'idProduct': 234567,
+            'name': 'Roronoa Zoro (OP01-002)',
+            'idCategory': 1,
+            'categoryName': 'One Piece Single',
+            'idExpansion': 1001,
+            'idMetacard': 5002,
+            'dateAdded': '2024-01-01',
+        },
     ]
 }
 
 NONSINGLES_JSON = {
-    "products": [
-        {"idProduct": 345678, "name": "OP-01 Booster Box", "idCategory": 2,
-         "categoryName": "Sealed Product", "idExpansion": 1001,
-         "idMetacard": None, "dateAdded": "2024-01-01"},
+    'products': [
+        {
+            'idProduct': 345678,
+            'name': 'OP-01 Booster Box',
+            'idCategory': 2,
+            'categoryName': 'Sealed Product',
+            'idExpansion': 1001,
+            'idMetacard': None,
+            'dateAdded': '2024-01-01',
+        },
     ]
 }
 
@@ -236,12 +280,14 @@ NONSINGLES_JSON = {
 # 4.1 / 4.2: Scraper Service Tests
 # ============================================================
 
+
 class TestOnepieceScraper:
     """Unit tests for onepiece_scraper service."""
 
     def test_refresh_op_sets_parses_dropdown(self, app):
         """refresh_op_sets() extracts set options from the cardlist dropdown."""
         from app.services.onepiece_scraper import refresh_op_sets
+
         with app.app_context():
             mock_session = MagicMock()
             mock_response = MagicMock()
@@ -273,10 +319,11 @@ class TestOnepieceScraper:
     def test_refresh_op_sets_no_dropdown(self, app):
         """refresh_op_sets handles missing dropdown gracefully."""
         from app.services.onepiece_scraper import refresh_op_sets
+
         with app.app_context():
             mock_session = MagicMock()
             mock_response = MagicMock()
-            mock_response.text = "<html><body>No dropdown</body></html>"
+            mock_response.text = '<html><body>No dropdown</body></html>'
             mock_response.raise_for_status = MagicMock()
             mock_session.get.return_value = mock_response
 
@@ -288,6 +335,7 @@ class TestOnepieceScraper:
     def test_extract_op_cards_parses_leader(self, app):
         """extract_op_cards() parses a Leader card correctly."""
         from app.services.onepiece_scraper import extract_op_cards
+
         with app.app_context():
             mock_session = MagicMock()
             mock_get_resp = MagicMock()
@@ -304,7 +352,7 @@ class TestOnepieceScraper:
             stats = result['stats']
             assert stats['total_scraped'] == 4  # 2 normal + 1 parallel + 1 reprint
             assert stats['inserted'] >= 1
-        
+
         # Verify card in DB — opset_id is derived as OP-01 (with hyphen)
         with app.app_context():
             card = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001').first()
@@ -329,6 +377,7 @@ class TestOnepieceScraper:
     def test_extract_op_cards_parses_character(self, app):
         """extract_op_cards() parses a Character card (Cost not Life)."""
         from app.services.onepiece_scraper import extract_op_cards
+
         with app.app_context():
             mock_session = MagicMock()
             mock_get_resp = MagicMock()
@@ -355,6 +404,7 @@ class TestOnepieceScraper:
     def test_extract_op_cards_handles_variant(self, app):
         """extract_op_cards() stores variant suffix in opcar_version."""
         from app.services.onepiece_scraper import extract_op_cards
+
         with app.app_context():
             mock_session = MagicMock()
             mock_get_resp = MagicMock()
@@ -367,15 +417,11 @@ class TestOnepieceScraper:
 
         # Verify both normal (OP01-001/p0) and variant (OP01-001/p1) exist
         with app.app_context():
-            normal = OpCard.query.filter_by(
-                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p0'
-            ).first()
+            normal = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p0').first()
             assert normal is not None
             assert 'OP01-001.png' in normal.image
-            
-            variant = OpCard.query.filter_by(
-                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p1'
-            ).first()
+
+            variant = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='p1').first()
             assert variant is not None
             assert variant.opcar_id == 'OP01-001'
             assert '_p1' in variant.image
@@ -383,6 +429,7 @@ class TestOnepieceScraper:
     def test_extract_op_cards_handles_reprint_variant(self, app):
         """extract_op_cards() handles _r1 (reprint) variants correctly."""
         from app.services.onepiece_scraper import extract_op_cards
+
         with app.app_context():
             mock_session = MagicMock()
             mock_get_resp = MagicMock()
@@ -395,9 +442,7 @@ class TestOnepieceScraper:
 
         # Verify reprint variant (OP01-001/r1) exists
         with app.app_context():
-            reprint = OpCard.query.filter_by(
-                opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='r1'
-            ).first()
+            reprint = OpCard.query.filter_by(opcar_opset_id='OP-01', opcar_id='OP01-001', opcar_version='r1').first()
             assert reprint is not None
             assert reprint.opcar_id == 'OP01-001'
             assert '_r1' in reprint.image
@@ -405,8 +450,10 @@ class TestOnepieceScraper:
 
     def test_extract_op_cards_parses_multi_color(self, app):
         """Multi-color cards are parsed correctly (e.g. Red/Yellow)."""
-        from app.services.onepiece_scraper import extract_op_cards
         from bs4 import BeautifulSoup
+
+        from app.services.onepiece_scraper import extract_op_cards
+
         # The fixture has Red and Green. Let's directly test the parser.
         with app.app_context():
             from app.services.onepiece_scraper import _parse_card_dl
@@ -421,6 +468,7 @@ class TestOnepieceScraper:
 # ============================================================
 # 4.3: Cardmarket Loader Tests
 # ============================================================
+
 
 class TestCardmarketLoader:
     """Unit tests for cardmarket_loader service."""
@@ -464,29 +512,33 @@ class TestCardmarketLoader:
 
     def test_loader_sha256_skips_unchanged(self, app):
         """CardmarketLoader skips reload when hash matches."""
-        from app.services.cardmarket_loader import CardmarketLoader
-        from app.models.cardmarket import OpcmLoadHistory
-        from datetime import datetime
         import hashlib
         import json as jmod
+        from datetime import datetime
+
+        from app.models.cardmarket import OpcmLoadHistory
+        from app.services.cardmarket_loader import CardmarketLoader
 
         with app.app_context():
             # Compute actual hash of SINGLES_JSON and pre-insert as loaded
             singles_json_str = jmod.dumps(SINGLES_JSON, sort_keys=True, ensure_ascii=False)
             singles_hash = hashlib.sha256(singles_json_str.encode('utf-8')).hexdigest()
 
-            db.session.add(OpcmLoadHistory(
-                oplh_date=datetime.utcnow().strftime('%Y%m%d'),
-                oplh_file_type='singles',
-                oplh_hash=singles_hash,
-                oplh_rows=2,
-                oplh_status='success',
-                oplh_message='Loaded',
-                oplh_loaded_at=datetime.utcnow()
-            ))
+            db.session.add(
+                OpcmLoadHistory(
+                    oplh_date=datetime.utcnow().strftime('%Y%m%d'),
+                    oplh_file_type='singles',
+                    oplh_hash=singles_hash,
+                    oplh_rows=2,
+                    oplh_status='success',
+                    oplh_message='Loaded',
+                    oplh_loaded_at=datetime.utcnow(),
+                )
+            )
             db.session.commit()
 
             with patch('app.services.cardmarket_loader.requests.get') as mock_get:
+
                 def mock_get_side_effect(url, timeout=30):
                     mock_resp = MagicMock()
                     mock_resp.raise_for_status = MagicMock()
@@ -510,7 +562,6 @@ class TestCardmarketLoader:
             validation_msg = '; '.join(s['message'] for s in result['steps'] if s['step'] == 'Validation')
             assert 'no changes' in validation_msg.lower() or 'singles' in validation_msg.lower()
 
-
     def test_auto_map_expansions_by_card_id(self, app):
         """_auto_map_expansions maps expansion to set using card IDs in names."""
         from app.services.cardmarket_loader import CardmarketLoader
@@ -525,9 +576,9 @@ class TestCardmarketLoader:
 
             # Products with card IDs pointing to OP04
             products = [
-                {"idProduct": 1, "name": "Trafalgar Law (OP04-001)", "idExpansion": 5365},
-                {"idProduct": 2, "name": "Nami (OP04-036)", "idExpansion": 5365},
-                {"idProduct": 3, "name": "Luffy (OP04-089)", "idExpansion": 5365},
+                {'idProduct': 1, 'name': 'Trafalgar Law (OP04-001)', 'idExpansion': 5365},
+                {'idProduct': 2, 'name': 'Nami (OP04-036)', 'idExpansion': 5365},
+                {'idProduct': 3, 'name': 'Luffy (OP04-089)', 'idExpansion': 5365},
             ]
 
             loader = CardmarketLoader()
@@ -550,10 +601,10 @@ class TestCardmarketLoader:
 
             # 3 OP01 cards, 1 outlier P-001 (e.g. promo included in expansion)
             products = [
-                {"idProduct": 1, "name": "Luffy (OP01-001)", "idExpansion": 9999},
-                {"idProduct": 2, "name": "Zoro (OP01-002)", "idExpansion": 9999},
-                {"idProduct": 3, "name": "Nami (OP01-016)", "idExpansion": 9999},
-                {"idProduct": 4, "name": "DON!!", "idExpansion": 9999},  # no card ID
+                {'idProduct': 1, 'name': 'Luffy (OP01-001)', 'idExpansion': 9999},
+                {'idProduct': 2, 'name': 'Zoro (OP01-002)', 'idExpansion': 9999},
+                {'idProduct': 3, 'name': 'Nami (OP01-016)', 'idExpansion': 9999},
+                {'idProduct': 4, 'name': 'DON!!', 'idExpansion': 9999},  # no card ID
             ]
 
             loader = CardmarketLoader()
@@ -569,13 +620,16 @@ class TestCardmarketLoader:
 
         with app.app_context():
             _seed_set(app, 'OP-04', 'Kingdoms of Intrigue')
-            db.session.add(OpcmExpansion(
-                opexp_id=5365, opexp_opset_id='OP-04'  # already mapped
-            ))
+            db.session.add(
+                OpcmExpansion(
+                    opexp_id=5365,
+                    opexp_opset_id='OP-04',  # already mapped
+                )
+            )
             db.session.commit()
 
             products = [
-                {"idProduct": 1, "name": "Luffy (OP04-001)", "idExpansion": 5365},
+                {'idProduct': 1, 'name': 'Luffy (OP04-001)', 'idExpansion': 5365},
             ]
 
             loader = CardmarketLoader()
@@ -594,8 +648,8 @@ class TestCardmarketLoader:
             db.session.commit()
 
             products = [
-                {"idProduct": 1, "name": "Card (OP99-001)", "idExpansion": 7777},
-                {"idProduct": 2, "name": "Card (OP99-002)", "idExpansion": 7777},
+                {'idProduct': 1, 'name': 'Card (OP99-001)', 'idExpansion': 7777},
+                {'idProduct': 2, 'name': 'Card (OP99-002)', 'idExpansion': 7777},
             ]
 
             loader = CardmarketLoader()
@@ -616,8 +670,8 @@ class TestCardmarketLoader:
             db.session.commit()
 
             products = [
-                {"idProduct": 1, "name": "Monkey.D.Luffy (ST01-001)", "idExpansion": 5237},
-                {"idProduct": 2, "name": "Nami (ST01-007)", "idExpansion": 5237},
+                {'idProduct': 1, 'name': 'Monkey.D.Luffy (ST01-001)', 'idExpansion': 5237},
+                {'idProduct': 2, 'name': 'Nami (ST01-007)', 'idExpansion': 5237},
             ]
 
             loader = CardmarketLoader()
@@ -636,8 +690,8 @@ class TestCardmarketLoader:
             db.session.commit()
 
             products = [
-                {"idProduct": 1, "name": "Booster Box", "idExpansion": 8888},
-                {"idProduct": 2, "name": "Bundle Pack", "idExpansion": 8888},
+                {'idProduct': 1, 'name': 'Booster Box', 'idExpansion': 8888},
+                {'idProduct': 2, 'name': 'Bundle Pack', 'idExpansion': 8888},
             ]
 
             loader = CardmarketLoader()
@@ -654,6 +708,7 @@ class TestCardmarketLoader:
             _seed_set(app, 'OP-01', 'Romance Dawn')
 
             with patch('app.services.cardmarket_loader.requests.get') as mock_get:
+
                 def mock_get_side_effect(url, timeout=30):
                     mock_resp = MagicMock()
                     mock_resp.raise_for_status = MagicMock()
@@ -693,16 +748,24 @@ class TestCardmarketLoader:
 
             # Create products with card IDs in names (Cardmarket format)
             today = CardmarketLoader().today
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=100,
-                opprd_name='Monkey D. Luffy (OP01-001)',
-                opprd_id_expansion=5229, opprd_type='single',
-            ))
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=101,
-                opprd_name='Roronoa Zoro (OP01-002)',
-                opprd_id_expansion=5229, opprd_type='single',
-            ))
+            db.session.add(
+                OpcmProduct(
+                    opprd_date=today,
+                    opprd_id_product=100,
+                    opprd_name='Monkey D. Luffy (OP01-001)',
+                    opprd_id_expansion=5229,
+                    opprd_type='single',
+                )
+            )
+            db.session.add(
+                OpcmProduct(
+                    opprd_date=today,
+                    opprd_id_product=101,
+                    opprd_name='Roronoa Zoro (OP01-002)',
+                    opprd_id_expansion=5229,
+                    opprd_type='single',
+                )
+            )
             db.session.commit()
 
             loader = CardmarketLoader()
@@ -731,11 +794,15 @@ class TestCardmarketLoader:
 
             today = CardmarketLoader().today
             # Product with card ID but NO expansion mapping
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=200,
-                opprd_name='Unique Hero (OP01-099)',
-                opprd_id_expansion=9999, opprd_type='single',
-            ))
+            db.session.add(
+                OpcmProduct(
+                    opprd_date=today,
+                    opprd_id_product=200,
+                    opprd_name='Unique Hero (OP01-099)',
+                    opprd_id_expansion=9999,
+                    opprd_type='single',
+                )
+            )
             db.session.commit()
 
             loader = CardmarketLoader()
@@ -753,11 +820,15 @@ class TestCardmarketLoader:
 
         with app.app_context():
             today = CardmarketLoader().today
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=300,
-                opprd_name='Booster Box',
-                opprd_id_expansion=5229, opprd_type='nonsingle',
-            ))
+            db.session.add(
+                OpcmProduct(
+                    opprd_date=today,
+                    opprd_id_product=300,
+                    opprd_name='Booster Box',
+                    opprd_id_expansion=5229,
+                    opprd_type='nonsingle',
+                )
+            )
             db.session.commit()
 
             loader = CardmarketLoader()
@@ -775,6 +846,7 @@ class TestCardmarketLoader:
             _seed_card(app, 'OP-01', 'OP01-001', 'Monkey D. Luffy')
 
             with patch('app.services.cardmarket_loader.requests.get') as mock_get:
+
                 def mock_get_side_effect(url, timeout=30):
                     mock_resp = MagicMock()
                     mock_resp.raise_for_status = MagicMock()
@@ -794,22 +866,20 @@ class TestCardmarketLoader:
             assert result['success'] is True
 
             # Product 123456 "Monkey D. Luffy (OP01-001)" should be mapped
-            mapping = OpcmProductCardMap.query.filter_by(
-                oppcm_id_product=123456
-            ).first()
+            mapping = OpcmProductCardMap.query.filter_by(oppcm_id_product=123456).first()
             assert mapping is not None
             assert mapping.oppcm_opset_id == 'OP-01'
             assert mapping.oppcm_opcar_id == 'OP01-001'
 
             # Check the Product Mapping step message shows auto-matched
-            pm_step = [s for s in result['steps']
-                       if s['step'] == 'Product Mapping'][0]
+            pm_step = next(s for s in result['steps'] if s['step'] == 'Product Mapping')
             assert 'auto-matched' in pm_step['message']
 
 
 # ============================================================
 # 4.5: Price Routes Tests
 # ============================================================
+
 
 class TestPriceRoutes:
     """Integration tests for /onepiecetcg/price/ routes."""
@@ -837,9 +907,11 @@ class TestPriceRoutes:
         """POST /onepiecetcg/price/refresh-op-sets calls scraper."""
         with app.app_context():
             _login(client)
-            mock_result = {'success': True, 'sets': [
-                {'id': 'OP01', 'label': 'ROMANCE DAWN', 'code': 'OP-01'}
-            ], 'count': 1}
+            mock_result = {
+                'success': True,
+                'sets': [{'id': 'OP01', 'label': 'ROMANCE DAWN', 'code': 'OP-01'}],
+                'count': 1,
+            }
 
             with patch('app.services.onepiece_scraper.refresh_op_sets', return_value=mock_result):
                 resp = client.post('/onepiecetcg/price/refresh-op-sets')
@@ -852,8 +924,7 @@ class TestPriceRoutes:
         """refresh-op-sets handles scraper errors gracefully."""
         with app.app_context():
             _login(client)
-            with patch('app.services.onepiece_scraper.refresh_op_sets',
-                       side_effect=Exception('Boom')):
+            with patch('app.services.onepiece_scraper.refresh_op_sets', side_effect=Exception('Boom')):
                 resp = client.post('/onepiecetcg/price/refresh-op-sets')
                 assert resp.status_code == 500
                 data = resp.get_json()
@@ -866,12 +937,14 @@ class TestPriceRoutes:
             mock_result = {
                 'success': True,
                 'steps': [{'step': 'test', 'status': 'SUCCESS', 'message': 'ok'}],
-                'stats': {'total_scraped': 10, 'inserted': 5, 'updated': 3, 'skipped': 2}
+                'stats': {'total_scraped': 10, 'inserted': 5, 'updated': 3, 'skipped': 2},
             }
             with patch('app.services.onepiece_scraper.extract_op_cards', return_value=mock_result):
-                resp = client.post('/onepiecetcg/price/extract-op-cards',
-                                   data=json.dumps({'sets': [{'id': '569101', 'code': 'OP-01'}]}),
-                                   content_type='application/json')
+                resp = client.post(
+                    '/onepiecetcg/price/extract-op-cards',
+                    data=json.dumps({'sets': [{'id': '569101', 'code': 'OP-01'}]}),
+                    content_type='application/json',
+                )
                 assert resp.status_code == 200
                 data = resp.get_json()
                 assert data['success'] is True
@@ -888,8 +961,7 @@ class TestPriceRoutes:
                 'errors': [],
                 'unmatched_count': 5,
             }
-            with patch('app.services.cardmarket_loader.CardmarketLoader.run',
-                       return_value=mock_result):
+            with patch('app.services.cardmarket_loader.CardmarketLoader.run', return_value=mock_result):
                 resp = client.post('/onepiecetcg/price/cardmarket-load')
                 assert resp.status_code == 200
                 data = resp.get_json()
@@ -911,10 +983,9 @@ class TestPriceRoutes:
         with app.app_context():
             _login(client)
             today = '20260101'
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=123,
-                opprd_name='Test Card', opprd_type='single'
-            ))
+            db.session.add(
+                OpcmProduct(opprd_date=today, opprd_id_product=123, opprd_name='Test Card', opprd_type='single')
+            )
             db.session.commit()
         resp = client.get('/onepiecetcg/price/cardmarket-unmatched')
         assert resp.status_code == 200
@@ -952,19 +1023,22 @@ class TestPriceRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Monkey D. Luffy')
-        resp = client.post('/onepiecetcg/price/cardmarket-map',
-                           data=json.dumps({
-                               'id_product': 123,
-                               'rbset_id': 'OP01',
-                               'rbcar_id': 'OP01-001',
-                           }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/cardmarket-map',
+            data=json.dumps(
+                {
+                    'id_product': 123,
+                    'rbset_id': 'OP01',
+                    'rbcar_id': 'OP01-001',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         with app.app_context():
-            mapping = OpcmProductCardMap.query.filter_by(
-                oppcm_id_product=123
-            ).first()
+            mapping = OpcmProductCardMap.query.filter_by(oppcm_id_product=123).first()
             assert mapping is not None
             assert mapping.oppcm_opset_id == 'OP01'
             assert mapping.oppcm_opcar_id == 'OP01-001'
@@ -976,13 +1050,18 @@ class TestPriceRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Monkey D. Luffy', version='p1')
-        resp = client.post('/onepiecetcg/price/cardmarket-map',
-                           data=json.dumps({
-                               'id_product': 124,
-                               'rbset_id': 'OP01',
-                               'rbcar_id': 'OP01-001',
-                               'rbcar_version': 'p1',
-                           }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/cardmarket-map',
+            data=json.dumps(
+                {
+                    'id_product': 124,
+                    'rbset_id': 'OP01',
+                    'rbcar_id': 'OP01-001',
+                    'rbcar_version': 'p1',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -995,9 +1074,9 @@ class TestPriceRoutes:
         """map returns 400 for missing required fields."""
         with app.app_context():
             _login(client)
-        resp = client.post('/onepiecetcg/price/cardmarket-map',
-                           data=json.dumps({'id_product': 123}),
-                           content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/cardmarket-map', data=json.dumps({'id_product': 123}), content_type='application/json'
+        )
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
@@ -1006,71 +1085,61 @@ class TestPriceRoutes:
         """POST /onepiecetcg/price/cardmarket-unmap removes mapping."""
         with app.app_context():
             _login(client)
-            db.session.add(OpcmProductCardMap(
-                oppcm_id_product=123,
-                oppcm_opset_id='OP01',
-                oppcm_opcar_id='OP01-001',
-            ))
+            db.session.add(
+                OpcmProductCardMap(
+                    oppcm_id_product=123,
+                    oppcm_opset_id='OP01',
+                    oppcm_opcar_id='OP01-001',
+                )
+            )
             db.session.commit()
-        resp = client.post('/onepiecetcg/price/cardmarket-unmap',
-                           data=json.dumps({'id_product': 123}),
-                           content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/cardmarket-unmap', data=json.dumps({'id_product': 123}), content_type='application/json'
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         with app.app_context():
-            assert OpcmProductCardMap.query.filter_by(
-                oppcm_id_product=123
-            ).first() is None
+            assert OpcmProductCardMap.query.filter_by(oppcm_id_product=123).first() is None
 
     def test_ignored_add(self, app, client):
         """POST /onepiecetcg/price/ignored/add adds ignored product."""
         with app.app_context():
             _login(client)
-        resp = client.post('/onepiecetcg/price/ignored/add',
-                           data=json.dumps({
-                               'id_product': 999,
-                               'name': 'Ignore Me'
-                           }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/ignored/add',
+            data=json.dumps({'id_product': 999, 'name': 'Ignore Me'}),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         with app.app_context():
-            ignored = OpcmIgnored.query.filter_by(
-                opig_id_product=999
-            ).first()
+            ignored = OpcmIgnored.query.filter_by(opig_id_product=999).first()
             assert ignored is not None
 
     def test_ignored_restore(self, app, client):
         """POST /onepiecetcg/price/ignored/restore removes ignored."""
         with app.app_context():
             _login(client)
-            db.session.add(OpcmIgnored(
-                opig_id_product=999,
-                opig_name='Ignore Me'
-            ))
+            db.session.add(OpcmIgnored(opig_id_product=999, opig_name='Ignore Me'))
             db.session.commit()
-        resp = client.post('/onepiecetcg/price/ignored/restore',
-                           data=json.dumps({
-                               'id_product': 999,
-                               'name': 'Ignore Me'
-                           }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/ignored/restore',
+            data=json.dumps({'id_product': 999, 'name': 'Ignore Me'}),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         with app.app_context():
-            assert OpcmIgnored.query.filter_by(
-                opig_id_product=999
-            ).first() is None
+            assert OpcmIgnored.query.filter_by(opig_id_product=999).first() is None
 
     def test_ignored_list(self, app, client):
         """GET /onepiecetcg/price/ignored lists ignored products."""
         with app.app_context():
             _login(client)
-            db.session.add(OpcmIgnored(
-                opig_id_product=888,
-                opig_name='Ignore 888'
-            ))
+            db.session.add(OpcmIgnored(opig_id_product=888, opig_name='Ignore 888'))
             db.session.commit()
         resp = client.get('/onepiecetcg/price/ignored')
         assert resp.status_code == 200
@@ -1082,11 +1151,7 @@ class TestPriceRoutes:
         """GET /onepiecetcg/price/cardmarket-unmapped-expansions lists unmapped."""
         with app.app_context():
             _login(client)
-            db.session.add(OpcmExpansion(
-                opexp_id=1001,
-                opexp_name='Test Expansion',
-                opexp_opset_id=None
-            ))
+            db.session.add(OpcmExpansion(opexp_id=1001, opexp_name='Test Expansion', opexp_opset_id=None))
             db.session.commit()
         resp = client.get('/onepiecetcg/price/cardmarket-unmapped-expansions')
         assert resp.status_code == 200
@@ -1098,18 +1163,19 @@ class TestPriceRoutes:
         """POST /onepiecetcg/price/cardmarket-map-expansion maps expansion."""
         with app.app_context():
             _login(client)
-            db.session.add(OpcmExpansion(
-                opexp_id=1001,
-                opexp_name='Test Expansion',
-                opexp_opset_id=None
-            ))
+            db.session.add(OpcmExpansion(opexp_id=1001, opexp_name='Test Expansion', opexp_opset_id=None))
             _seed_set(app, 'OP01', 'Romance Dawn')
             db.session.commit()
-        resp = client.post('/onepiecetcg/price/cardmarket-map-expansion',
-                           data=json.dumps({
-                               'rbexp_id': 1001,
-                               'rbset_id': 'OP01',
-                           }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/price/cardmarket-map-expansion',
+            data=json.dumps(
+                {
+                    'rbexp_id': 1001,
+                    'rbset_id': 'OP01',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1122,10 +1188,9 @@ class TestPriceRoutes:
         with app.app_context():
             _login(client)
             today = '20260101'
-            db.session.add(OpcmProduct(
-                opprd_date=today, opprd_id_product=100,
-                opprd_name='Test Card', opprd_type='single'
-            ))
+            db.session.add(
+                OpcmProduct(opprd_date=today, opprd_id_product=100, opprd_name='Test Card', opprd_type='single')
+            )
             db.session.commit()
         resp = client.get('/onepiecetcg/price/cardmarket-mappings')
         assert resp.status_code == 200
@@ -1146,9 +1211,9 @@ class TestPriceRoutes:
                 'samples': [],
             }
             with patch('app.services.cardmarket_matcher.auto_match', return_value=mock_result):
-                resp = client.post('/onepiecetcg/price/auto-match',
-                                   data=json.dumps({'dry_run': True}),
-                                   content_type='application/json')
+                resp = client.post(
+                    '/onepiecetcg/price/auto-match', data=json.dumps({'dry_run': True}), content_type='application/json'
+                )
                 assert resp.status_code == 200
                 data = resp.get_json()
                 assert data['success'] is True

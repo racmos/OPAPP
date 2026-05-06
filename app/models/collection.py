@@ -1,10 +1,11 @@
-from app import db
 from datetime import datetime
+
+from app import db
 
 
 class OpCollection(db.Model):
     __tablename__ = 'opcollection'
-    __table_args__ = {"schema": "onepiecetcg"}
+    __table_args__ = {'schema': 'onepiecetcg'}
 
     # Synthetic PK. Allows multiple rows for the same (set, card, foil, user)
     # that differ in condition / language / sell price.

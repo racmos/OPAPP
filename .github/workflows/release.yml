@@ -1,0 +1,173 @@
+name: Release
+
+# Two triggers:
+#   1. Push a tag like v1.2.3  -> creates GitHub Release (no deploy)
+#   2. Manual dispatch          -> creates GitHub Release + optional deploy
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g. v1.2.3). Leave empty to use latest commit."
+        required: false
+        type: string
+      deploy_target:
+        description: "Deploy target (none = release only)"
+        required: true
+        type: choice
+        options:
+          - none
+          - development
+          - production
+        default: none
+      skip_tests:
+        description: "Skip test check before release? (emergency only)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write  # Required for Tailscale workload identity
+
+env:
+  PRIMARY_PYTHON: "3.12"
+
+jobs:
+  # ── Gate: run tests before release ──
+  preflight:
+    name: Pre-release tests
+    runs-on: ubuntu-latest
+    if: ${{ !(inputs.skip_tests == true) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PRIMARY_PYTHON }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          DATABASE_URL: "sqlite://"
+          SECRET_KEY: "ci-test-key"
+        run: pytest --tb=short -q
+
+  # ── Create GitHub Release ──
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ !cancelled() && (needs.preflight.result == 'success' || needs.preflight.result == 'skipped') }}
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version tag
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG="v0.0.0-$(git rev-parse --short HEAD)"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: $TAG"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Find previous tag (if any)
+          PREV=$(git tag --sort=-creatordate | grep '^v' | head -2 | tail -1 || true)
+          if [[ -n "$PREV" && "$PREV" != "${{ steps.resolve.outputs.tag }}" ]]; then
+            RANGE="$PREV..HEAD"
+          else
+            RANGE="HEAD~20..HEAD"
+          fi
+          echo "## Changes" > changelog.md
+          echo "" >> changelog.md
+          git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges >> changelog.md
+          echo "" >> changelog.md
+          echo "---" >> changelog.md
+          echo "_Full diff: https://github.com/${{ github.repository }}/compare/${PREV:-main}...${{ steps.resolve.outputs.tag }}_" >> changelog.md
+
+      - name: Create release archive
+        run: |
+          git archive --format=tar.gz --prefix=opapp/ -o opapp-${{ steps.resolve.outputs.tag }}.tar.gz HEAD
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.resolve.outputs.tag }}
+          name: OPAPP ${{ steps.resolve.outputs.tag }}
+          body_path: changelog.md
+          files: opapp-${{ steps.resolve.outputs.tag }}.tar.gz
+          draft: false
+          prerelease: ${{ contains(steps.resolve.outputs.tag, '-') }}
+          generate_release_notes: false
+
+  # ── Deploy via Tailscale SSH ──
+  deploy:
+    name: Deploy to ${{ inputs.deploy_target }}
+    runs-on: ubuntu-latest
+    needs: release
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_target != 'none' }}
+    environment: ${{ inputs.deploy_target }}
+    concurrency:
+      group: deploy-${{ inputs.deploy_target }}
+      cancel-in-progress: false
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              bash -s <<'DEPLOY_SCRIPT'
+          set -euo pipefail
+          cd ${{ secrets.DEPLOY_PATH }}
+
+          echo "==> Pulling latest changes..."
+          git fetch origin main
+          git reset --hard origin/main
+
+          echo "==> Installing dependencies..."
+          source .venv/bin/activate
+          pip install -r requirements.txt --quiet
+
+          echo "==> Running database migrations..."
+          # Uncomment when Flask-Migrate is set up:
+          # flask db upgrade
+
+          echo "==> Restarting service..."
+          sudo systemctl restart opapp.service
+
+          echo "==> Verifying service..."
+          sleep 3
+          if systemctl is-active --quiet opapp.service; then
+            echo "Deploy successful - service is running"
+          else
+            echo "ERROR: Service failed to start!"
+            sudo journalctl -u opapp.service -n 20 --no-pager
+            exit 1
+          fi
+
+          echo "==> Health check..."
+          curl -sf http://localhost:5001/onepiecetcg/ > /dev/null \
+            && echo "Health check PASSED" \
+            || echo "Health check FAILED (non-critical)"
+          DEPLOY_SCRIPT

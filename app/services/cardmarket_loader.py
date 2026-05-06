@@ -3,6 +3,7 @@ Cardmarket data loader service for One Piece (game 18).
 Downloads product catalogs and price guides from Cardmarket S3,
 validates changes via SHA-256, and loads to PostgreSQL tables.
 """
+
 import hashlib
 import json
 import logging
@@ -12,10 +13,15 @@ from datetime import datetime
 from typing import Optional
 
 import requests
+
 from app import db
 from app.models.cardmarket import (
-    OpcmProduct, OpcmPrice, OpcmCategory, OpcmExpansion,
-    OpcmLoadHistory, OpcmProductCardMap, OpProducts
+    OpcmCategory,
+    OpcmExpansion,
+    OpcmLoadHistory,
+    OpcmPrice,
+    OpcmProduct,
+    OpcmProductCardMap,
 )
 
 logger = logging.getLogger(__name__)
@@ -89,8 +95,9 @@ class CardmarketLoader:
 
                 cat_count = self._extract_categories(all_products)
                 exp_count = self._extract_expansions(all_products)
-                self._update_step('Categories & Expansions', 'SUCCESS',
-                                  f'{cat_count} categories, {exp_count} expansions loaded')
+                self._update_step(
+                    'Categories & Expansions', 'SUCCESS', f'{cat_count} categories, {exp_count} expansions loaded'
+                )
 
             # Step 4: Load products
             products_loaded = 0
@@ -100,14 +107,12 @@ class CardmarketLoader:
                 if singles_should_load:
                     count = self._load_products(singles_data.get('products', []), 'single')
                     products_loaded += count
-                    self._record_history('singles', singles_hash, count, 'success',
-                                         f'Loaded {count} singles')
+                    self._record_history('singles', singles_hash, count, 'success', f'Loaded {count} singles')
 
                 if nonsingles_should_load:
                     count = self._load_products(nonsingles_data.get('products', []), 'nonsingle')
                     products_loaded += count
-                    self._record_history('nonsingles', nonsingles_hash, count, 'success',
-                                         f'Loaded {count} nonsingles')
+                    self._record_history('nonsingles', nonsingles_hash, count, 'success', f'Loaded {count} nonsingles')
 
                 self._update_step('Products', 'SUCCESS', f'{products_loaded} products loaded')
             else:
@@ -116,33 +121,34 @@ class CardmarketLoader:
                 self._record_history('nonsingles', nonsingles_hash, 0, 'skipped', 'No changes')
 
             # Step 5: Auto-map expansions to internal sets
-            self._add_step('Expansion Mapping', 'RUNNING',
-                           'Auto-mapping expansions to sets by card ID analysis...')
+            self._add_step('Expansion Mapping', 'RUNNING', 'Auto-mapping expansions to sets by card ID analysis...')
             # Use ALL products (singles + nonsingles) for best coverage
-            combined_products = (
-                singles_data.get('products', []) +
-                nonsingles_data.get('products', [])
-            )
+            combined_products = singles_data.get('products', []) + nonsingles_data.get('products', [])
             exp_map = self._auto_map_expansions(combined_products)
-            exp_msg = (f"{exp_map['auto_mapped']} auto-mapped, "
-                       f"{exp_map['already_mapped']} already mapped, "
-                       f"{exp_map['no_match']} no match")
+            exp_msg = (
+                f'{exp_map["auto_mapped"]} auto-mapped, '
+                f'{exp_map["already_mapped"]} already mapped, '
+                f'{exp_map["no_match"]} no match'
+            )
             self._update_step('Expansion Mapping', 'SUCCESS', exp_msg)
 
             # Step 6: Load prices (always daily)
             self._add_step('Prices', 'RUNNING', 'Loading price data...')
             price_count = self._load_prices(price_data.get('priceGuides', []))
-            self._record_history('price_guide', price_hash, price_count, 'success',
-                                 f'Loaded {price_count} price records')
+            self._record_history(
+                'price_guide', price_hash, price_count, 'success', f'Loaded {price_count} price records'
+            )
             self._update_step('Prices', 'SUCCESS', f'{price_count} price records loaded')
 
             # Step 7: Auto-map products to internal cards
             self._add_step('Product Mapping', 'RUNNING', 'Auto-mapping products to cards...')
             map_counts = self._update_product_card_map()
             self.unmatched_count = map_counts['unmatched']
-            map_msg = (f"{map_counts['auto_matched']} auto-matched, "
-                       f"{map_counts['unmatched']} unmatched, "
-                       f"{map_counts['already_mapped']} already mapped")
+            map_msg = (
+                f'{map_counts["auto_matched"]} auto-matched, '
+                f'{map_counts["unmatched"]} unmatched, '
+                f'{map_counts["already_mapped"]} already mapped'
+            )
             self._update_step('Product Mapping', 'SUCCESS', map_msg)
 
             db.session.commit()
@@ -163,7 +169,7 @@ class CardmarketLoader:
             return resp.json()
         except Exception as e:
             logger.error(f'Failed to download {file_type} from {url}: {e}')
-            self.errors.append(f'Download failed for {file_type}: {str(e)}')
+            self.errors.append(f'Download failed for {file_type}: {e!s}')
             return None
 
     def _compute_hash(self, data: dict) -> str:
@@ -174,10 +180,7 @@ class CardmarketLoader:
     def _check_already_loaded(self, file_type: str, new_hash: str) -> bool:
         """Check if this exact file was already loaded today."""
         existing = OpcmLoadHistory.query.filter_by(
-            oplh_date=self.today,
-            oplh_file_type=file_type,
-            oplh_hash=new_hash,
-            oplh_status='success'
+            oplh_date=self.today, oplh_file_type=file_type, oplh_hash=new_hash, oplh_status='success'
         ).first()
         return existing is not None
 
@@ -308,10 +311,7 @@ class CardmarketLoader:
             if not id_product:
                 continue
 
-            existing = OpcmProduct.query.filter_by(
-                opprd_date=self.today,
-                opprd_id_product=id_product
-            ).first()
+            existing = OpcmProduct.query.filter_by(opprd_date=self.today, opprd_id_product=id_product).first()
 
             if existing:
                 existing.opprd_name = p.get('name', '')
@@ -322,17 +322,19 @@ class CardmarketLoader:
                 existing.opprd_date_added = p.get('dateAdded')
                 existing.opprd_type = product_type
             else:
-                db.session.add(OpcmProduct(
-                    opprd_date=self.today,
-                    opprd_id_product=id_product,
-                    opprd_name=p.get('name', ''),
-                    opprd_id_category=p.get('idCategory'),
-                    opprd_category_name=p.get('categoryName'),
-                    opprd_id_expansion=p.get('idExpansion'),
-                    opprd_id_metacard=p.get('idMetacard'),
-                    opprd_date_added=p.get('dateAdded'),
-                    opprd_type=product_type,
-                ))
+                db.session.add(
+                    OpcmProduct(
+                        opprd_date=self.today,
+                        opprd_id_product=id_product,
+                        opprd_name=p.get('name', ''),
+                        opprd_id_category=p.get('idCategory'),
+                        opprd_category_name=p.get('categoryName'),
+                        opprd_id_expansion=p.get('idExpansion'),
+                        opprd_id_metacard=p.get('idMetacard'),
+                        opprd_date_added=p.get('dateAdded'),
+                        opprd_type=product_type,
+                    )
+                )
             count += 1
 
         db.session.flush()
@@ -346,10 +348,7 @@ class CardmarketLoader:
             if not id_product:
                 continue
 
-            existing = OpcmPrice.query.filter_by(
-                opprc_date=self.today,
-                opprc_id_product=id_product
-            ).first()
+            existing = OpcmPrice.query.filter_by(opprc_date=self.today, opprc_id_product=id_product).first()
 
             if existing:
                 existing.opprc_id_category = p.get('idCategory')
@@ -367,24 +366,26 @@ class CardmarketLoader:
                 existing.opprc_avg30_foil = p.get('avg30-foil')
                 existing.opprc_low_ex = p.get('low-ex+')
             else:
-                db.session.add(OpcmPrice(
-                    opprc_date=self.today,
-                    opprc_id_product=id_product,
-                    opprc_id_category=p.get('idCategory'),
-                    opprc_avg=p.get('avg'),
-                    opprc_low=p.get('low'),
-                    opprc_trend=p.get('trend'),
-                    opprc_avg1=p.get('avg1'),
-                    opprc_avg7=p.get('avg7'),
-                    opprc_avg30=p.get('avg30'),
-                    opprc_avg_foil=p.get('avg-foil'),
-                    opprc_low_foil=p.get('low-foil'),
-                    opprc_trend_foil=p.get('trend-foil'),
-                    opprc_avg1_foil=p.get('avg1-foil'),
-                    opprc_avg7_foil=p.get('avg7-foil'),
-                    opprc_avg30_foil=p.get('avg30-foil'),
-                    opprc_low_ex=p.get('low-ex+'),
-                ))
+                db.session.add(
+                    OpcmPrice(
+                        opprc_date=self.today,
+                        opprc_id_product=id_product,
+                        opprc_id_category=p.get('idCategory'),
+                        opprc_avg=p.get('avg'),
+                        opprc_low=p.get('low'),
+                        opprc_trend=p.get('trend'),
+                        opprc_avg1=p.get('avg1'),
+                        opprc_avg7=p.get('avg7'),
+                        opprc_avg30=p.get('avg30'),
+                        opprc_avg_foil=p.get('avg-foil'),
+                        opprc_low_foil=p.get('low-foil'),
+                        opprc_trend_foil=p.get('trend-foil'),
+                        opprc_avg1_foil=p.get('avg1-foil'),
+                        opprc_avg7_foil=p.get('avg7-foil'),
+                        opprc_avg30_foil=p.get('avg30-foil'),
+                        opprc_low_ex=p.get('low-ex+'),
+                    )
+                )
             count += 1
 
         db.session.flush()
@@ -410,9 +411,7 @@ class CardmarketLoader:
 
         # Build expansion→set lookup
         exp_to_set: dict[int, str] = {}
-        for exp in OpcmExpansion.query.filter(
-            OpcmExpansion.opexp_opset_id.isnot(None)
-        ).all():
+        for exp in OpcmExpansion.query.filter(OpcmExpansion.opexp_opset_id.isnot(None)).all():
             exp_to_set[exp.opexp_id] = exp.opexp_opset_id
 
         products = OpcmProduct.query.filter_by(opprd_date=self.today).all()
@@ -422,9 +421,7 @@ class CardmarketLoader:
                 products = OpcmProduct.query.filter_by(opprd_date=latest).all()
 
         for product in products:
-            existing = OpcmProductCardMap.query.filter_by(
-                oppcm_id_product=product.opprd_id_product
-            ).first()
+            existing = OpcmProductCardMap.query.filter_by(oppcm_id_product=product.opprd_id_product).first()
 
             if existing:
                 counts['already_mapped'] += 1
@@ -445,33 +442,35 @@ class CardmarketLoader:
                     ).first()
 
                     if card:
-                        db.session.add(OpcmProductCardMap(
-                            oppcm_id_product=product.opprd_id_product,
-                            oppcm_opset_id=card.opcar_opset_id,
-                            oppcm_opcar_id=card.opcar_id,
-                            oppcm_opcar_version=card.opcar_version,
-                            oppcm_match_type='auto',
-                            oppcm_confidence=1.0,
-                        ))
+                        db.session.add(
+                            OpcmProductCardMap(
+                                oppcm_id_product=product.opprd_id_product,
+                                oppcm_opset_id=card.opcar_opset_id,
+                                oppcm_opcar_id=card.opcar_id,
+                                oppcm_opcar_version=card.opcar_version,
+                                oppcm_match_type='auto',
+                                oppcm_confidence=1.0,
+                            )
+                        )
                         counts['auto_matched'] += 1
                         continue
 
             # Strategy 2: fallback — exact name match (strip card ID suffix)
             clean_name = card_id_re.sub('', product.opprd_name or '').strip()
             if clean_name:
-                matches = OpCard.query.filter(
-                    db.func.lower(OpCard.opcar_name) == clean_name.lower()
-                ).all()
+                matches = OpCard.query.filter(db.func.lower(OpCard.opcar_name) == clean_name.lower()).all()
 
                 if len(matches) == 1:
-                    db.session.add(OpcmProductCardMap(
-                        oppcm_id_product=product.opprd_id_product,
-                        oppcm_opset_id=matches[0].opcar_opset_id,
-                        oppcm_opcar_id=matches[0].opcar_id,
-                        oppcm_opcar_version=matches[0].opcar_version,
-                        oppcm_match_type='auto',
-                        oppcm_confidence=0.8,
-                    ))
+                    db.session.add(
+                        OpcmProductCardMap(
+                            oppcm_id_product=product.opprd_id_product,
+                            oppcm_opset_id=matches[0].opcar_opset_id,
+                            oppcm_opcar_id=matches[0].opcar_id,
+                            oppcm_opcar_version=matches[0].opcar_version,
+                            oppcm_match_type='auto',
+                            oppcm_confidence=0.8,
+                        )
+                    )
                     counts['auto_matched'] += 1
                     continue
 
@@ -480,18 +479,19 @@ class CardmarketLoader:
         db.session.flush()
         return counts
 
-    def _record_history(self, file_type: str, hash_val: str, rows: int,
-                        status: str, message: str):
+    def _record_history(self, file_type: str, hash_val: str, rows: int, status: str, message: str):
         """Record load operation in opcm_load_history."""
-        db.session.add(OpcmLoadHistory(
-            oplh_date=self.today,
-            oplh_file_type=file_type,
-            oplh_hash=hash_val,
-            oplh_rows=rows,
-            oplh_status=status,
-            oplh_message=message,
-            oplh_loaded_at=datetime.utcnow(),
-        ))
+        db.session.add(
+            OpcmLoadHistory(
+                oplh_date=self.today,
+                oplh_file_type=file_type,
+                oplh_hash=hash_val,
+                oplh_rows=rows,
+                oplh_status=status,
+                oplh_message=message,
+                oplh_loaded_at=datetime.utcnow(),
+            )
+        )
         db.session.flush()
 
     def _add_step(self, step: str, status: str, message: str):

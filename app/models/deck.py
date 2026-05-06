@@ -1,13 +1,13 @@
-from app import db
 from datetime import datetime
+
+from app import db
 
 
 class OpDeck(db.Model):
     __tablename__ = 'opdecks'
     __table_args__ = (
-        db.UniqueConstraint('opdck_user', 'opdck_name', 'opdck_seq',
-                            name='uq_deck_user_name_seq'),
-        {"schema": "onepiecetcg"}
+        db.UniqueConstraint('opdck_user', 'opdck_name', 'opdck_seq', name='uq_deck_user_name_seq'),
+        {'schema': 'onepiecetcg'},
     )
 
     # Primary key autoincremental
@@ -21,8 +21,7 @@ class OpDeck(db.Model):
     opdck_seq = db.Column(db.SmallInteger, default=1)
 
     # Snapshot with full date/time
-    opdck_snapshot = db.Column(db.DateTime, nullable=False,
-                                default=datetime.utcnow, index=True)
+    opdck_snapshot = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     # Deck metadata
     opdck_description = db.Column(db.Text)
@@ -47,18 +46,12 @@ class OpDeck(db.Model):
     @classmethod
     def get_versions(cls, user, name):
         """Get all versions of a deck."""
-        return cls.query.filter_by(
-            opdck_user=user,
-            opdck_name=name
-        ).order_by(cls.opdck_seq.desc()).all()
+        return cls.query.filter_by(opdck_user=user, opdck_name=name).order_by(cls.opdck_seq.desc()).all()
 
     @classmethod
     def get_next_seq(cls, user, name):
         """Calculate the next sequential number for a deck."""
-        last_deck = cls.query.filter_by(
-            opdck_user=user,
-            opdck_name=name
-        ).order_by(cls.opdck_seq.desc()).first()
+        last_deck = cls.query.filter_by(opdck_user=user, opdck_name=name).order_by(cls.opdck_seq.desc()).first()
 
         return (last_deck.opdck_seq + 1) if last_deck and last_deck.opdck_seq else 1
 

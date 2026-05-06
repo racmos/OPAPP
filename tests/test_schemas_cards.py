@@ -2,6 +2,7 @@
 Unit tests for OpCardCreate Pydantic schema.
 Strict TDD: tests written BEFORE production code.
 """
+
 import pytest
 from pydantic import ValidationError
 

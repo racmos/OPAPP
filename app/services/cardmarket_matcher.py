@@ -4,6 +4,7 @@ Cardmarket auto-matcher for One Piece.
 Assigns unmapped Cardmarket products to internal opcards by name matching
 and (set, card_id, foil) slot expansion.
 """
+
 from __future__ import annotations
 
 import re
@@ -15,9 +16,12 @@ from sqlalchemy import func
 from app import db
 from app.models import OpCard
 from app.models.cardmarket import (
-    OpcmProduct, OpcmPrice, OpcmExpansion, OpcmProductCardMap, OpcmIgnored,
+    OpcmExpansion,
+    OpcmIgnored,
+    OpcmPrice,
+    OpcmProduct,
+    OpcmProductCardMap,
 )
-
 
 _NOISE_RE = re.compile(
     r'\b(foil|showcase|signed|plated|promo|extended|alt(?:ernate)?\s+art|'
@@ -79,7 +83,9 @@ def _get_latest_prices() -> dict[int, float]:
         db.session.query(
             OpcmPrice.opprc_id_product,
             func.max(OpcmPrice.opprc_date),
-        ).group_by(OpcmPrice.opprc_id_product).all()
+        )
+        .group_by(OpcmPrice.opprc_id_product)
+        .all()
     )
     if not latest_per_prod:
         return {}
@@ -89,22 +95,16 @@ def _get_latest_prices() -> dict[int, float]:
     for p in rows:
         if latest_per_prod.get(p.opprc_id_product) != p.opprc_date:
             continue
-        v = (
-            p.opprc_low
-            or p.opprc_low_foil
-            or p.opprc_avg7
-            or p.opprc_avg7_foil
-            or 0
-        )
+        v = p.opprc_low or p.opprc_low_foil or p.opprc_avg7 or p.opprc_avg7_foil or 0
         prices[p.opprc_id_product] = float(v) if v is not None else 0.0
     return prices
 
 
 def _get_expansion_to_set_map() -> dict[int, str]:
     return dict(
-        db.session.query(
-            OpcmExpansion.opexp_id, OpcmExpansion.opexp_opset_id
-        ).filter(OpcmExpansion.opexp_opset_id.isnot(None)).all()
+        db.session.query(OpcmExpansion.opexp_id, OpcmExpansion.opexp_opset_id)
+        .filter(OpcmExpansion.opexp_opset_id.isnot(None))
+        .all()
     )
 
 
@@ -153,7 +153,6 @@ def _expand_slots(card: OpCard, taken: Optional[set] = None) -> list[tuple[OpCar
     Common/Uncommon → 2 slots ('N' and 'S'). Others → 1 slot (None).
     """
     rarity = (card.opcar_rarity or '').lower()
-    card_type = (card.opcar_category or '').lower()
 
     if rarity in ('c', 'uc', 'common', 'uncommon'):
         raw_slots = [(card, 'N'), (card, 'S')]
@@ -163,10 +162,7 @@ def _expand_slots(card: OpCard, taken: Optional[set] = None) -> list[tuple[OpCar
     if taken is None:
         return raw_slots
 
-    return [
-        s for s in raw_slots
-        if (card.opcar_opset_id, card.opcar_id, card.opcar_version, s[1]) not in taken
-    ]
+    return [s for s in raw_slots if (card.opcar_opset_id, card.opcar_id, card.opcar_version, s[1]) not in taken]
 
 
 def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
@@ -175,10 +171,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
     Returns dict with: assigned, unmatched, skipped, no_candidates, review,
     samples, success.
     """
-    ignored: set[tuple] = {
-        (r.opig_id_product, r.opig_name)
-        for r in OpcmIgnored.query.all()
-    }
+    ignored: set[tuple] = {(r.opig_id_product, r.opig_name) for r in OpcmIgnored.query.all()}
 
     groups, skipped_no_metacard, ignored_count = _group_products_by_metacard(ignored=ignored)
     if not groups:
@@ -196,7 +189,6 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
 
     prices = _get_latest_prices()
     cards_by_norm = _build_card_index()
-    exp_to_set = _get_expansion_to_set_map()
 
     taken: set[tuple] = set(
         db.session.query(
@@ -217,16 +209,19 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
     if max_groups:
         items = items[:max_groups]
 
-    for metacard_id, prods in items:
+    for _metacard_id, prods in items:
         norm_candidates = {normalize_name(p.opprd_name) for p in prods if p.opprd_name}
         norm_candidates.discard('')
         candidates: list[OpCard] = []
         for n in norm_candidates:
             candidates.extend(cards_by_norm.get(n, []))
         seen = set()
-        candidates = [c for c in candidates
-                      if (c.opcar_opset_id, c.opcar_id, c.opcar_version) not in seen
-                      and not seen.add((c.opcar_opset_id, c.opcar_id, c.opcar_version))]
+        candidates = [
+            c
+            for c in candidates
+            if (c.opcar_opset_id, c.opcar_id, c.opcar_version) not in seen
+            and not seen.add((c.opcar_opset_id, c.opcar_id, c.opcar_version))
+        ]
 
         if not candidates:
             no_candidates += len(prods)
@@ -242,7 +237,7 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
             key=lambda p: (prices.get(p.opprd_id_product, 0.0), p.opprd_id_product),
         )
 
-        for prod, slot in zip(prods_sorted, slots):
+        for prod, slot in zip(prods_sorted, slots, strict=False):
             card, foil = slot
 
             if not dry_run:
@@ -269,17 +264,19 @@ def auto_match(dry_run: bool = False, max_groups: Optional[int] = None) -> dict:
                 )
                 db.session.add(m)
             assigned += 1
-            samples.append({
-                'id_product': prod.opprd_id_product,
-                'product_name': prod.opprd_name,
-                'price': prices.get(prod.opprd_id_product, 0.0),
-                'rbset_id': card.opcar_opset_id,
-                'rbcar_id': card.opcar_id,
-                'rbcar_version': card.opcar_version,
-                'rbcar_name': card.opcar_name,
-                'rbpcm_foil': foil,
-                'rbcar_rarity': card.opcar_rarity,
-            })
+            samples.append(
+                {
+                    'id_product': prod.opprd_id_product,
+                    'product_name': prod.opprd_name,
+                    'price': prices.get(prod.opprd_id_product, 0.0),
+                    'rbset_id': card.opcar_opset_id,
+                    'rbcar_id': card.opcar_id,
+                    'rbcar_version': card.opcar_version,
+                    'rbcar_name': card.opcar_name,
+                    'rbpcm_foil': foil,
+                    'rbcar_rarity': card.opcar_rarity,
+                }
+            )
 
         extra = max(0, len(prods_sorted) - len(slots))
         unmatched += extra

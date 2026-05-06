@@ -1,12 +1,14 @@
 """
 Collection routes module with Pydantic validation.
 """
+
 from datetime import datetime
-from flask import Blueprint, render_template, request, jsonify
-from flask_login import login_required, current_user
-from sqlalchemy import func
+
+from flask import Blueprint, jsonify, render_template, request
+from flask_login import current_user, login_required
+
 from app import db
-from app.models import OpCollection, OpCard, OpSet
+from app.models import OpCard, OpCollection, OpSet
 from app.schemas.validators import CollectionAdd, validate_json
 
 collection_bp = Blueprint('collection', __name__, url_prefix='/onepiecetcg/collection')
@@ -55,12 +57,16 @@ def collection():
     search_color = request.args.get('search_color', '')
     search_rarity = request.args.get('search_rarity', '')
 
-    query = db.session.query(OpCollection, OpCard).join(
-        OpCard,
-        (OpCollection.opcol_opset_id == OpCard.opcar_opset_id) &
-        (OpCollection.opcol_opcar_id == OpCard.opcar_id) &
-        (OpCollection.opcol_opcar_version == OpCard.opcar_version)
-    ).filter(OpCollection.opcol_user == current_user.username)
+    query = (
+        db.session.query(OpCollection, OpCard)
+        .join(
+            OpCard,
+            (OpCollection.opcol_opset_id == OpCard.opcar_opset_id)
+            & (OpCollection.opcol_opcar_id == OpCard.opcar_id)
+            & (OpCollection.opcol_opcar_version == OpCard.opcar_version),
+        )
+        .filter(OpCollection.opcol_user == current_user.username)
+    )
 
     if search_set:
         query = query.filter(OpCollection.opcol_opset_id == search_set)
@@ -82,24 +88,25 @@ def collection():
     )
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
-    collections_data = [
-        {'collection': col, 'card': card}
-        for col, card in pagination.items
-    ]
+    collections_data = [{'collection': col, 'card': card} for col, card in pagination.items]
 
     sets = OpSet.query.order_by(OpSet.opset_id).all()
-    colors = sorted(set(
-        c.opcar_color for c in db.session.query(OpCard.opcar_color)
-        .filter(OpCard.opcar_color.isnot(None)).distinct().all()
-        if c.opcar_color
-    ))
+    colors = sorted(
+        set(
+            c.opcar_color
+            for c in db.session.query(OpCard.opcar_color).filter(OpCard.opcar_color.isnot(None)).distinct().all()
+            if c.opcar_color
+        )
+    )
 
-    return render_template('collection.html',
-                           collections_data=collections_data,
-                           pagination=pagination,
-                           sets=sets,
-                           colors=colors,
-                           per_page=per_page)
+    return render_template(
+        'collection.html',
+        collections_data=collections_data,
+        pagination=pagination,
+        sets=sets,
+        colors=colors,
+        per_page=per_page,
+    )
 
 
 @collection_bp.route('/add', methods=['POST'])
@@ -166,9 +173,7 @@ def update_collection():
     if not opcol_id:
         return jsonify({'success': False, 'message': 'opcol_id required'}), 400
 
-    col = OpCollection.query.filter_by(
-        opcol_id=opcol_id, opcol_user=current_user.username
-    ).first_or_404()
+    col = OpCollection.query.filter_by(opcol_id=opcol_id, opcol_user=current_user.username).first_or_404()
 
     if 'opcol_quantity' in data:
         qty = data['opcol_quantity']
@@ -202,9 +207,7 @@ def remove_collection():
     if not opcol_id:
         return jsonify({'success': False, 'message': 'opcol_id required'}), 400
 
-    col = OpCollection.query.filter_by(
-        opcol_id=opcol_id, opcol_user=current_user.username
-    ).first_or_404()
+    col = OpCollection.query.filter_by(opcol_id=opcol_id, opcol_user=current_user.username).first_or_404()
 
     db.session.delete(col)
     db.session.commit()

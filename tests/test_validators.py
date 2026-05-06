@@ -1,10 +1,13 @@
 """
 Tests for Pydantic schemas and @validate_json decorator.
 """
+
 import json
+
 import pytest
-from pydantic import ValidationError
 from flask import Flask, jsonify
+from pydantic import ValidationError
+
 from app.schemas.validators import LoginSchema, RegisterSchema, validate_json
 
 
@@ -13,34 +16,34 @@ class TestLoginSchema:
 
     def test_valid_login(self):
         """LoginSchema accepts valid email and password."""
-        schema = LoginSchema(email="user@test.com", password="secret123")
-        assert schema.email == "user@test.com"
-        assert schema.password == "secret123"
+        schema = LoginSchema(email='user@test.com', password='secret123')
+        assert schema.email == 'user@test.com'
+        assert schema.password == 'secret123'
 
     def test_missing_email(self):
         """LoginSchema rejects missing email."""
         with pytest.raises(ValidationError):
-            LoginSchema(password="secret123")
+            LoginSchema(password='secret123')
 
     def test_missing_password(self):
         """LoginSchema rejects missing password."""
         with pytest.raises(ValidationError):
-            LoginSchema(email="user@test.com")
+            LoginSchema(email='user@test.com')
 
     def test_invalid_email_no_at(self):
         """LoginSchema rejects email without @."""
         with pytest.raises(ValidationError):
-            LoginSchema(email="notanemail", password="secret123")
+            LoginSchema(email='notanemail', password='secret123')
 
     def test_empty_password(self):
         """LoginSchema rejects empty password."""
         with pytest.raises(ValidationError):
-            LoginSchema(email="user@test.com", password="")
+            LoginSchema(email='user@test.com', password='')
 
     def test_strips_email_whitespace(self):
         """LoginSchema strips whitespace from email."""
-        schema = LoginSchema(email="  user@test.com  ", password="secret123")
-        assert schema.email == "user@test.com"
+        schema = LoginSchema(email='  user@test.com  ', password='secret123')
+        assert schema.email == 'user@test.com'
 
 
 class TestRegisterSchema:
@@ -48,66 +51,46 @@ class TestRegisterSchema:
 
     def test_valid_register(self):
         """RegisterSchema accepts valid data."""
-        schema = RegisterSchema(
-            username="newuser",
-            email="new@test.com",
-            password="secret123"
-        )
-        assert schema.username == "newuser"
-        assert schema.email == "new@test.com"
-        assert schema.password == "secret123"
+        schema = RegisterSchema(username='newuser', email='new@test.com', password='secret123')
+        assert schema.username == 'newuser'
+        assert schema.email == 'new@test.com'
+        assert schema.password == 'secret123'
 
     def test_missing_username(self):
         """RegisterSchema rejects missing username."""
         with pytest.raises(ValidationError):
-            RegisterSchema(email="new@test.com", password="secret123")
+            RegisterSchema(email='new@test.com', password='secret123')
 
     def test_missing_email(self):
         """RegisterSchema rejects missing email."""
         with pytest.raises(ValidationError):
-            RegisterSchema(username="newuser", password="secret123")
+            RegisterSchema(username='newuser', password='secret123')
 
     def test_missing_password(self):
         """RegisterSchema rejects missing password."""
         with pytest.raises(ValidationError):
-            RegisterSchema(username="newuser", email="new@test.com")
+            RegisterSchema(username='newuser', email='new@test.com')
 
     def test_short_password(self):
         """RegisterSchema rejects password shorter than 6 chars."""
         with pytest.raises(ValidationError):
-            RegisterSchema(
-                username="newuser",
-                email="new@test.com",
-                password="12345"
-            )
+            RegisterSchema(username='newuser', email='new@test.com', password='12345')
 
     def test_empty_username(self):
         """RegisterSchema rejects empty username."""
         with pytest.raises(ValidationError):
-            RegisterSchema(
-                username="",
-                email="new@test.com",
-                password="secret123"
-            )
+            RegisterSchema(username='', email='new@test.com', password='secret123')
 
     def test_invalid_email_no_at(self):
         """RegisterSchema rejects email without @."""
         with pytest.raises(ValidationError):
-            RegisterSchema(
-                username="newuser",
-                email="notanemail",
-                password="secret123"
-            )
+            RegisterSchema(username='newuser', email='notanemail', password='secret123')
 
     def test_strips_username_whitespace(self):
         """RegisterSchema strips whitespace from username and email."""
-        schema = RegisterSchema(
-            username="  newuser  ",
-            email="  new@test.com  ",
-            password="secret123"
-        )
-        assert schema.username == "newuser"
-        assert schema.email == "new@test.com"
+        schema = RegisterSchema(username='  newuser  ', email='  new@test.com  ', password='secret123')
+        assert schema.username == 'newuser'
+        assert schema.email == 'new@test.com'
 
 
 class TestValidateJsonDecorator:
@@ -127,10 +110,13 @@ class TestValidateJsonDecorator:
             data = getattr(LoginSchema, '__test_data__', None)
             # Use request.validated_data set by the decorator
             from flask import request
-            return jsonify({
-                'success': True,
-                'email': request.validated_data.email,
-            })
+
+            return jsonify(
+                {
+                    'success': True,
+                    'email': request.validated_data.email,
+                }
+            )
 
         app.config['TESTING'] = True
         return app
@@ -145,7 +131,7 @@ class TestValidateJsonDecorator:
         response = mini_client.post(
             '/test-json',
             data=json.dumps({'email': 'user@test.com', 'password': 'secret123'}),
-            content_type='application/json'
+            content_type='application/json',
         )
         assert response.status_code == 200
         data = response.get_json()
@@ -157,7 +143,7 @@ class TestValidateJsonDecorator:
         response = mini_client.post(
             '/test-json',
             data=json.dumps({'password': 'secret123'}),  # missing email
-            content_type='application/json'
+            content_type='application/json',
         )
         assert response.status_code == 400
         data = response.get_json()
@@ -169,7 +155,7 @@ class TestValidateJsonDecorator:
         response = mini_client.post(
             '/test-json',
             data={'email': 'user@test.com', 'password': 'secret123'},
-            content_type='application/x-www-form-urlencoded'
+            content_type='application/x-www-form-urlencoded',
         )
         assert response.status_code == 400
         data = response.get_json()

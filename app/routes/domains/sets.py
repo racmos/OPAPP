@@ -1,8 +1,10 @@
 """
 Sets routes module with Pydantic validation.
 """
-from flask import Blueprint, render_template, request, jsonify
+
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import login_required
+
 from app import db
 from app.models import OpSet
 from app.schemas.validators import SetCreate, SetUpdate, validate_json
@@ -41,6 +43,7 @@ def add_set():
         return jsonify({'success': False, 'message': 'Set name already exists'}), 400
 
     from datetime import date as date_type
+
     outdat = None
     if data.opset_outdat:
         try:
@@ -49,10 +52,7 @@ def add_set():
             return jsonify({'success': False, 'message': 'Invalid date format (use YYYY-MM-DD)'}), 400
 
     new_set = OpSet(
-        opset_id=data.opset_id,
-        opset_name=data.opset_name,
-        opset_ncard=data.opset_ncard,
-        opset_outdat=outdat
+        opset_id=data.opset_id, opset_name=data.opset_name, opset_ncard=data.opset_ncard, opset_outdat=outdat
     )
 
     db.session.add(new_set)
@@ -70,10 +70,7 @@ def update_set(set_id):
     opset = OpSet.query.filter_by(opset_id=set_id).first_or_404()
 
     if data.opset_name is not None:
-        existing = OpSet.query.filter(
-            OpSet.opset_name == data.opset_name,
-            OpSet.opset_id != set_id
-        ).first()
+        existing = OpSet.query.filter(OpSet.opset_name == data.opset_name, OpSet.opset_id != set_id).first()
         if existing:
             return jsonify({'success': False, 'message': 'Set name already exists'}), 400
         opset.opset_name = data.opset_name
@@ -83,6 +80,7 @@ def update_set(set_id):
 
     if data.opset_outdat is not None:
         from datetime import date as date_type
+
         try:
             opset.opset_outdat = date_type.fromisoformat(data.opset_outdat) if data.opset_outdat else None
         except (ValueError, TypeError):

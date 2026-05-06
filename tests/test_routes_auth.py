@@ -1,8 +1,11 @@
 """
 Integration tests for auth routes (login, register, logout).
 """
+
 import json
+
 import pytest
+
 from app import db
 from app.models import OpUser
 
@@ -23,10 +26,11 @@ class TestAuthLogin:
             db.session.add(user)
             db.session.commit()
 
-        response = client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'test@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'test@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         # JSON-based login returns 200 with success + redirect URL
         assert response.status_code == 200
@@ -43,10 +47,11 @@ class TestAuthLogin:
             db.session.commit()
 
         # Login via JSON
-        login_resp = client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'test2@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        login_resp = client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'test2@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
         assert login_resp.status_code == 200
 
         # Access dashboard (should now be authenticated)
@@ -61,10 +66,11 @@ class TestAuthLogin:
             db.session.add(user)
             db.session.commit()
 
-        response = client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'test3@test.com',
-            'password': 'wrongpassword'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'test3@test.com', 'password': 'wrongpassword'}),
+            content_type='application/json',
+        )
 
         assert response.status_code == 401
         data = response.get_json()
@@ -72,10 +78,11 @@ class TestAuthLogin:
 
     def test_login_post_nonexistent_user(self, client):
         """POST /onepiecetcg/login with non-existent user returns 401."""
-        response = client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'nobody@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'nobody@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         assert response.status_code == 401
         data = response.get_json()
@@ -90,10 +97,11 @@ class TestAuthLogin:
             db.session.commit()
 
         # Login via JSON
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'logged@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'logged@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         # Now try to access login page
         response = client.get('/onepiecetcg/login', follow_redirects=False)
@@ -112,11 +120,11 @@ class TestAuthRegister:
 
     def test_register_post_creates_user(self, app, client):
         """POST /onepiecetcg/register creates a new user."""
-        response = client.post('/onepiecetcg/register', data=json.dumps({
-            'username': 'newuser',
-            'email': 'new@test.com',
-            'password': 'secret123'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/register',
+            data=json.dumps({'username': 'newuser', 'email': 'new@test.com', 'password': 'secret123'}),
+            content_type='application/json',
+        )
 
         # JSON-based register returns 200 with success
         assert response.status_code == 200
@@ -138,11 +146,11 @@ class TestAuthRegister:
             db.session.add(user)
             db.session.commit()
 
-        response = client.post('/onepiecetcg/register', data=json.dumps({
-            'username': 'dupeuser',
-            'email': 'dupe2@test.com',
-            'password': 'secret123'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/register',
+            data=json.dumps({'username': 'dupeuser', 'email': 'dupe2@test.com', 'password': 'secret123'}),
+            content_type='application/json',
+        )
 
         assert response.status_code == 400
         data = response.get_json()
@@ -156,11 +164,11 @@ class TestAuthRegister:
             db.session.add(user)
             db.session.commit()
 
-        response = client.post('/onepiecetcg/register', data=json.dumps({
-            'username': 'user2',
-            'email': 'dupe@test.com',
-            'password': 'secret123'
-        }), content_type='application/json')
+        response = client.post(
+            '/onepiecetcg/register',
+            data=json.dumps({'username': 'user2', 'email': 'dupe@test.com', 'password': 'secret123'}),
+            content_type='application/json',
+        )
 
         assert response.status_code == 400
         data = response.get_json()
@@ -175,10 +183,11 @@ class TestAuthRegister:
             db.session.commit()
 
         # Login via JSON
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'loggedreg@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'loggedreg@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         # Now try to access register page
         response = client.get('/onepiecetcg/register', follow_redirects=False)
@@ -198,10 +207,11 @@ class TestAuthLogout:
             db.session.commit()
 
         # Login via JSON
-        client.post('/onepiecetcg/login', data=json.dumps({
-            'email': 'logout@test.com',
-            'password': 'testpass123'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'logout@test.com', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
 
         # Logout
         response = client.get('/onepiecetcg/logout', follow_redirects=False)

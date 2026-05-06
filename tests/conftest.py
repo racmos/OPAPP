@@ -1,7 +1,9 @@
 """
 Pytest configuration and fixtures for OPAPP tests.
 """
+
 import pytest
+
 from app import create_app, db
 
 

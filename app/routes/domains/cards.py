@@ -1,15 +1,18 @@
 """
 Cards routes module.
 """
-from flask import Blueprint, render_template, request, jsonify
-from flask_login import login_required
-from sqlalchemy import or_, and_, exists
+
 from urllib.parse import urlencode
+
+from flask import Blueprint, jsonify, render_template, request
+from flask_login import login_required
+from sqlalchemy import exists, or_
+
 from app import db
-from app.models import OpSet, OpCard
-from app.models.cardmarket import OpcmProductCardMap, OpcmPrice
-from app.schemas.validators import validate_json
+from app.models import OpCard, OpSet
+from app.models.cardmarket import OpcmPrice, OpcmProductCardMap
 from app.schemas.cards import OpCardCreate
+from app.schemas.validators import validate_json
 
 cards_bp = Blueprint('cards', __name__, url_prefix='/onepiecetcg/cards')
 
@@ -28,9 +31,9 @@ def _build_price_map(card_items):
 
     # Find mappings to Cardmarket products for these cards
     mappings = OpcmProductCardMap.query.filter(
-        db.tuple_(OpcmProductCardMap.oppcm_opset_id,
-                  OpcmProductCardMap.oppcm_opcar_id,
-                  OpcmProductCardMap.oppcm_opcar_version).in_(card_keys)
+        db.tuple_(
+            OpcmProductCardMap.oppcm_opset_id, OpcmProductCardMap.oppcm_opcar_id, OpcmProductCardMap.oppcm_opcar_version
+        ).in_(card_keys)
     ).all()
 
     if not mappings:
@@ -46,8 +49,7 @@ def _build_price_map(card_items):
 
     # Get prices for these products on the latest date
     prices = OpcmPrice.query.filter(
-        OpcmPrice.opprc_date == latest_date,
-        OpcmPrice.opprc_id_product.in_(product_ids)
+        OpcmPrice.opprc_date == latest_date, OpcmPrice.opprc_id_product.in_(product_ids)
     ).all()
 
     product_price = {}
@@ -85,9 +87,9 @@ def _build_price_map(card_items):
 def cards():
     """List all cards with filters and pagination."""
     page = request.args.get('page', 1, type=int)
-    ALLOWED_PER_PAGE = {50, 100, 250, 500, 1000}
+    allowed_per_page = {50, 100, 250, 500, 1000}
     per_page = request.args.get('per_page', 50, type=int)
-    if per_page not in ALLOWED_PER_PAGE:
+    if per_page not in allowed_per_page:
         per_page = 50
 
     search_name = request.args.get('search_name', '')
@@ -131,9 +133,7 @@ def cards():
     if search_color:
         colors = [c.strip() for c in search_color.split(',') if c.strip()]
         if colors:
-            color_filters = [
-                OpCard.opcar_color.ilike(f'%{c}%') for c in colors
-            ]
+            color_filters = [OpCard.opcar_color.ilike(f'%{c}%') for c in colors]
             query = query.filter(or_(*color_filters))
 
     # Category and rarity: single-select exact match
@@ -176,9 +176,7 @@ def cards():
 
     # Has price filter: only cards that have a Cardmarket price mapping
     if has_price == '1':
-        latest_pdate = db.session.query(
-            db.func.max(OpcmPrice.opprc_date)
-        ).scalar()
+        latest_pdate = db.session.query(db.func.max(OpcmPrice.opprc_date)).scalar()
         if latest_pdate:
             query = query.filter(
                 exists().where(
@@ -191,7 +189,7 @@ def cards():
             )
 
     # Dynamic sort
-    SORT_MAP = {
+    sort_map = {
         'set': OpCard.opcar_opset_id,
         'card_id': OpCard.opcar_id,
         'name': OpCard.opcar_name,
@@ -204,36 +202,28 @@ def cards():
         'block_icon': OpCard.opcar_block_icon,
     }
 
-    if sort and sort in SORT_MAP:
-        sort_col = SORT_MAP[sort]
+    if sort and sort in sort_map:
+        sort_col = sort_map[sort]
         if order == 'desc':
-            query = query.order_by(sort_col.desc(),
-                                   OpCard.opcar_opset_id,
-                                   OpCard.opcar_id)
+            query = query.order_by(sort_col.desc(), OpCard.opcar_opset_id, OpCard.opcar_id)
         else:
-            query = query.order_by(sort_col.asc(),
-                                   OpCard.opcar_opset_id,
-                                   OpCard.opcar_id)
+            query = query.order_by(sort_col.asc(), OpCard.opcar_opset_id, OpCard.opcar_id)
     elif sort == 'price':
-        latest_pdate = db.session.query(
-            db.func.max(OpcmPrice.opprc_date)
-        ).scalar()
+        latest_pdate = db.session.query(db.func.max(OpcmPrice.opprc_date)).scalar()
         if latest_pdate:
             price_subq = (
                 db.session.query(
                     OpcmProductCardMap.oppcm_opset_id,
                     OpcmProductCardMap.oppcm_opcar_id,
                     OpcmProductCardMap.oppcm_opcar_version,
-                    db.func.coalesce(
-                        db.func.min(OpcmPrice.opprc_low), 99999
-                    ).label('min_price')
+                    db.func.coalesce(db.func.min(OpcmPrice.opprc_low), 99999).label('min_price'),
                 )
                 .outerjoin(
                     OpcmPrice,
                     db.and_(
                         OpcmPrice.opprc_id_product == OpcmProductCardMap.oppcm_id_product,
                         OpcmPrice.opprc_date == latest_pdate,
-                    )
+                    ),
                 )
                 .group_by(
                     OpcmProductCardMap.oppcm_opset_id,
@@ -248,22 +238,16 @@ def cards():
                     price_subq.c.oppcm_opset_id == OpCard.opcar_opset_id,
                     price_subq.c.oppcm_opcar_id == OpCard.opcar_id,
                     price_subq.c.oppcm_opcar_version == OpCard.opcar_version,
-                )
+                ),
             )
             if order == 'desc':
-                query = query.order_by(price_subq.c.min_price.desc(),
-                                       OpCard.opcar_opset_id,
-                                       OpCard.opcar_id)
+                query = query.order_by(price_subq.c.min_price.desc(), OpCard.opcar_opset_id, OpCard.opcar_id)
             else:
-                query = query.order_by(price_subq.c.min_price.asc(),
-                                       OpCard.opcar_opset_id,
-                                       OpCard.opcar_id)
+                query = query.order_by(price_subq.c.min_price.asc(), OpCard.opcar_opset_id, OpCard.opcar_id)
         else:
-            query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id,
-                                   OpCard.opcar_version)
+            query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version)
     else:
-        query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id,
-                               OpCard.opcar_version)
+        query = query.order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version)
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
@@ -287,36 +271,38 @@ def cards():
     query_parts = [(k, v) for k, v in request.args.items(multi=True) if k != 'page']
     query_string_no_page = urlencode(query_parts)
 
-    return render_template('cards.html',
-                           cards=pagination.items,
-                           pagination=pagination,
-                           sets=sets,
-                           colors=colors,
-                           categories=categories,
-                           rarities=rarities,
-                           per_page=per_page,
-                           view=view,
-                           price_map=price_map,
-                           query_string_no_page=query_string_no_page,
-                           search_name=search_name,
-                           search_set=search_set,
-                           search_color=search_color,
-                           search_category=search_category,
-                           search_rarity=search_rarity,
-                           search_effect=search_effect,
-                           search_type=search_type,
-                           search_banned=search_banned,
-                           has_price=has_price,
-                           sort=sort,
-                           order=order,
-                           min_cost=min_cost,
-                           max_cost=max_cost,
-                           min_power=min_power,
-                           max_power=max_power,
-                           min_counter=min_counter,
-                           max_counter=max_counter,
-                           min_block_icon=min_block_icon,
-                           max_block_icon=max_block_icon)
+    return render_template(
+        'cards.html',
+        cards=pagination.items,
+        pagination=pagination,
+        sets=sets,
+        colors=colors,
+        categories=categories,
+        rarities=rarities,
+        per_page=per_page,
+        view=view,
+        price_map=price_map,
+        query_string_no_page=query_string_no_page,
+        search_name=search_name,
+        search_set=search_set,
+        search_color=search_color,
+        search_category=search_category,
+        search_rarity=search_rarity,
+        search_effect=search_effect,
+        search_type=search_type,
+        search_banned=search_banned,
+        has_price=has_price,
+        sort=sort,
+        order=order,
+        min_cost=min_cost,
+        max_cost=max_cost,
+        min_power=min_power,
+        max_power=max_power,
+        min_counter=min_counter,
+        max_counter=max_counter,
+        min_block_icon=min_block_icon,
+        max_block_icon=max_block_icon,
+    )
 
 
 @cards_bp.route('/add', methods=['POST'])
@@ -333,9 +319,7 @@ def add_card():
 
     # Check duplicate
     existing = OpCard.query.filter_by(
-        opcar_opset_id=data.opcar_opset_id,
-        opcar_id=data.opcar_id,
-        opcar_version=data.opcar_version
+        opcar_opset_id=data.opcar_opset_id, opcar_id=data.opcar_id, opcar_version=data.opcar_version
     ).first()
     if existing:
         return jsonify({'success': False, 'error': 'Card already exists'}), 409
@@ -363,15 +347,17 @@ def add_card():
     db.session.add(card)
     db.session.commit()
 
-    return jsonify({
-        'success': True,
-        'card': {
-            'opcar_opset_id': card.opcar_opset_id,
-            'opcar_id': card.opcar_id,
-            'opcar_version': card.opcar_version,
-            'opcar_name': card.opcar_name,
+    return jsonify(
+        {
+            'success': True,
+            'card': {
+                'opcar_opset_id': card.opcar_opset_id,
+                'opcar_id': card.opcar_id,
+                'opcar_version': card.opcar_version,
+                'opcar_name': card.opcar_name,
+            },
         }
-    }), 200
+    ), 200
 
 
 @cards_bp.route('/search')
@@ -386,23 +372,28 @@ def search_cards():
         return jsonify({'success': True, 'cards': []})
 
     like = f'%{q}%'
-    results = OpCard.query.filter(
-        or_(
-            OpCard.opcar_name.ilike(like),
-            OpCard.opcar_id.ilike(like)
-        )
-    ).order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version).limit(limit).all()
+    results = (
+        OpCard.query.filter(or_(OpCard.opcar_name.ilike(like), OpCard.opcar_id.ilike(like)))
+        .order_by(OpCard.opcar_opset_id, OpCard.opcar_id, OpCard.opcar_version)
+        .limit(limit)
+        .all()
+    )
 
-    return jsonify({
-        'success': True,
-        'cards': [{
-            'set_id': c.opcar_opset_id,
-            'card_id': c.opcar_id,
-            'card_version': c.opcar_version,
-            'name': c.opcar_name,
-            'rarity': c.opcar_rarity,
-            'color': c.opcar_color,
-            'category': c.opcar_category,
-            'image': c.image_src,
-        } for c in results],
-    })
+    return jsonify(
+        {
+            'success': True,
+            'cards': [
+                {
+                    'set_id': c.opcar_opset_id,
+                    'card_id': c.opcar_id,
+                    'card_version': c.opcar_version,
+                    'name': c.opcar_name,
+                    'rarity': c.opcar_rarity,
+                    'color': c.opcar_color,
+                    'category': c.opcar_category,
+                    'image': c.image_src,
+                }
+                for c in results
+            ],
+        }
+    )
