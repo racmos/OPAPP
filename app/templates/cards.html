@@ -25,9 +25,10 @@
 }
 .card-item img {
     width: 100%;
-    height: 280px;
-    object-fit: cover;
+    aspect-ratio: 5 / 7;
+    object-fit: contain;
     display: block;
+    background: var(--bg-dark);
 }
 .card-item .card-info {
     padding: 0.75rem;
@@ -137,6 +138,10 @@
     margin-top: 2rem;
     flex-wrap: wrap;
 }
+.pagination-top {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+}
 .pagination a, .pagination span {
     padding: 0.5rem 1rem;
     border-radius: 4px;
@@ -180,6 +185,7 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
     z-index: 9998;
+    pointer-events: none;
 }
 .thumb-container:hover::after {
     content: '';
@@ -195,9 +201,135 @@
     background-position: center;
     z-index: 9999;
     border-radius: 8px;
+    pointer-events: none;
 }
 .thumb-container:hover .list-thumb {
     border: 2px solid var(--accent);
+}
+
+/* Color filter toggle buttons */
+.color-btn-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.color-btn {
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #fff;
+    transition: all 0.2s ease;
+    opacity: 0.45;
+}
+.color-btn.active {
+    opacity: 1;
+    border-color: #fff;
+    box-shadow: 0 0 8px rgba(255,255,255,0.3);
+}
+.color-btn:hover {
+    opacity: 0.8;
+}
+.color-btn-blue { background-color: #2980b9; }
+.color-btn-yellow { background-color: #f39c12; color: #000; }
+.color-btn-purple { background-color: #8e44ad; }
+.color-btn-black { background-color: #2c3e50; }
+.color-btn-red { background-color: #c0392b; }
+.color-btn-green { background-color: #27ae60; }
+
+/* Category / Rarity toggle buttons */
+.toggle-btn-group {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+.toggle-btn {
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    border: 1px solid var(--bg-hover);
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.toggle-btn:hover {
+    border-color: var(--gold);
+    color: var(--text);
+}
+.toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* Banned / Price toggle buttons (pill) */
+.pill-toggle {
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    border: 1px solid var(--bg-hover);
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.pill-toggle:hover {
+    border-color: var(--gold);
+    color: var(--text);
+}
+.pill-toggle.active {
+    background: #c0392b;
+    color: #fff;
+    border-color: #c0392b;
+}
+
+/* Range input row */
+.range-row {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+.range-row input[type="number"] {
+    width: 65px;
+    padding: 0.35rem 0.4rem;
+    font-size: 0.8rem;
+    background-color: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--bg-hover);
+    border-radius: 4px;
+}
+.range-row span {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+/* Sort controls */
+.sort-row {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+.sort-row select {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    background-color: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--bg-hover);
+    border-radius: 4px;
+}
+
+/* Select styling for filter form */
+.filter-section select {
+    background-color: var(--bg-panel);
+    color: var(--text);
+    border: 1px solid var(--bg-hover);
 }
 </style>
 {% endblock %}
@@ -209,95 +341,228 @@
     <button class="btn btn-primary" onclick="openAddCardModal()" style="font-size:0.9rem;">+ Add Card</button>
 </div>
 
-<!-- Search bar -->
+<!-- Filter section -->
 <div class="filter-section">
-    <form method="GET" action="{{ url_for('cards.cards') }}" class="filter-row">
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="search_name">Card Name</label>
-            <input type="text" id="search_name" name="search_name"
-                   value="{{ request.args.get('search_name', '') }}" placeholder="Search by name...">
+    <form method="GET" action="{{ url_for('cards.cards') }}" id="filterForm" onsubmit="return applyFilters()">
+        <!-- Hidden inputs for toggle groups -->
+        <input type="hidden" name="search_color" id="inp_search_color" value="{{ search_color }}">
+        <input type="hidden" name="search_category" id="inp_search_category" value="{{ search_category }}">
+        <input type="hidden" name="search_rarity" id="inp_search_rarity" value="{{ search_rarity }}">
+        <input type="hidden" name="search_banned" id="inp_search_banned" value="{{ search_banned }}">
+        <input type="hidden" name="has_price" id="inp_has_price" value="{{ has_price }}">
+        <input type="hidden" name="sort" id="inp_sort" value="{{ sort }}">
+        <input type="hidden" name="order" id="inp_order" value="{{ order }}">
+
+        <!-- Row 1: Name, Set, Per page, View, Columns -->
+        <div class="filter-row">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="search_name">Card Name</label>
+                <input type="text" id="search_name" name="search_name"
+                       value="{{ search_name }}" placeholder="Search by name...">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="search_set">Set</label>
+                <select id="search_set" name="search_set">
+                    <option value="">All Sets</option>
+                    {% for s in sets %}
+                    <option value="{{ s.opset_id }}" {% if search_set == s.opset_id %}selected{% endif %}>
+                        {{ s.opset_id }} - {{ s.opset_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:0.5rem;flex-wrap:wrap;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size:0.8rem;">Per page</label>
+                    <select id="per_page" name="per_page" onchange="changePerPage(this.value)" style="padding:0.3rem 0.5rem;font-size:0.8rem;width:auto;">
+                        {% for n in [50, 100, 250, 500, 1000] %}
+                        <option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <span style="color:var(--text-muted);font-size:0.8rem;margin-bottom:0.25rem;">View:</span>
+                <button type="button" id="viewGridBtn" class="btn btn-sm" onclick="toggleView('grid')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'list' %}opacity:0.5;background:var(--bg-hover);{% endif %}">Grid</button>
+                <button type="button" id="viewListBtn" class="btn btn-sm" onclick="toggleView('list')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'grid' %}opacity:0.5;background:var(--bg-hover);{% endif %}">List</button>
+                <span id="gridColSlider" style="{% if view == 'list' %}display:none;{% endif %}display:flex;align-items:center;gap:0.35rem;">
+                    <label for="gridCols" style="color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">Columns:</label>
+                    <input type="range" id="gridCols" min="1" max="10" value="0" oninput="updateGridCols(this.value)" style="width:80px;accent-color:var(--accent);" title="Grid columns">
+                    <span id="gridColsLabel" style="color:var(--gold);font-size:0.8rem;min-width:18px;">auto</span>
+                </span>
+            </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="search_set">Set</label>
-            <select id="search_set" name="search_set">
-                <option value="">All Sets</option>
-                {% for s in sets %}
-                <option value="{{ s.opset_id }}" {% if request.args.get('search_set') == s.opset_id %}selected{% endif %}>
-                    {{ s.opset_id }} - {{ s.opset_name }}
-                </option>
-                {% endfor %}
-            </select>
+
+        <!-- Row 2: Color buttons -->
+        <div class="filter-row">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Color</label>
+                <div class="color-btn-group" id="colorBtnGroup">
+                    {% set sel_colors = search_color.split(',')|map('trim')|select|list %}
+                    {% for c, css_class in [('Blue', 'blue'), ('Yellow', 'yellow'), ('Purple', 'purple'), ('Black', 'black'), ('Red', 'red'), ('Green', 'green')] %}
+                    <button type="button" class="color-btn color-btn-{{ css_class }} {% if c in sel_colors %}active{% endif %}"
+                            onclick="toggleColorFilter('{{ c }}')">{{ c }}</button>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="search_color">Color</label>
-            <select id="search_color" name="search_color">
-                <option value="">All Colors</option>
-                {% for c in colors %}
-                <option value="{{ c }}" {% if request.args.get('search_color') == c %}selected{% endif %}>{{ c }}</option>
-                {% endfor %}
-            </select>
+
+        <!-- Row 3: Category and Rarity toggle buttons -->
+        <div class="filter-row">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Category</label>
+                <div class="toggle-btn-group">
+                    {% for cat in categories %}
+                    <button type="button" class="toggle-btn {% if search_category == cat %}active{% endif %}"
+                            onclick="selectSingleFilter('search_category', '{{ cat }}')">{{ cat }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Rarity</label>
+                <div class="toggle-btn-group">
+                    {% for r in rarities %}
+                    <button type="button" class="toggle-btn {% if search_rarity == r %}active{% endif %}"
+                            onclick="selectSingleFilter('search_rarity', '{{ r }}')">{{ r }}</button>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="search_category">Category</label>
-            <select id="search_category" name="search_category">
-                <option value="">All Categories</option>
-                {% for cat in categories %}
-                <option value="{{ cat }}" {% if request.args.get('search_category') == cat %}selected{% endif %}>{{ cat }}</option>
-                {% endfor %}
-            </select>
+
+        <!-- Row 4: Range filters (Cost, Power, Counter, Block Icon) -->
+        <div class="filter-row">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Cost</label>
+                <div class="range-row">
+                    <input type="number" name="min_cost" placeholder="Min" value="{{ min_cost if min_cost is not none else '' }}">
+                    <span>–</span>
+                    <input type="number" name="max_cost" placeholder="Max" value="{{ max_cost if max_cost is not none else '' }}">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Power</label>
+                <div class="range-row">
+                    <input type="number" name="min_power" placeholder="Min" value="{{ min_power if min_power is not none else '' }}">
+                    <span>–</span>
+                    <input type="number" name="max_power" placeholder="Max" value="{{ max_power if max_power is not none else '' }}">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Counter</label>
+                <div class="range-row">
+                    <input type="number" name="min_counter" placeholder="Min" value="{{ min_counter if min_counter is not none else '' }}">
+                    <span>–</span>
+                    <input type="number" name="max_counter" placeholder="Max" value="{{ max_counter if max_counter is not none else '' }}">
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Block Icon</label>
+                <div class="range-row">
+                    <input type="number" name="min_block_icon" placeholder="Min" value="{{ min_block_icon if min_block_icon is not none else '' }}">
+                    <span>–</span>
+                    <input type="number" name="max_block_icon" placeholder="Max" value="{{ max_block_icon if max_block_icon is not none else '' }}">
+                </div>
+            </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0;">
-            <label for="search_rarity">Rarity</label>
-            <select id="search_rarity" name="search_rarity">
-                <option value="">All Rarities</option>
-                {% for r in rarities %}
-                <option value="{{ r }}" {% if request.args.get('search_rarity') == r %}selected{% endif %}>{{ r }}</option>
-                {% endfor %}
-            </select>
+
+        <!-- Row 5: Type, Banned, Price, Sort -->
+        <div class="filter-row">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="search_type">Type</label>
+                <input type="text" id="search_type" name="search_type"
+                       value="{{ search_type }}" placeholder="e.g. Supernova">
+            </div>
+            <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <label>Banned</label>
+                <button type="button" class="pill-toggle {% if search_banned == '1' %}active{% endif %}"
+                        id="bannedToggle" onclick="togglePillFilter('search_banned', '1')">
+                    {% if search_banned == '1' %}Banned Only{% else %}Show All{% endif %}
+                </button>
+            </div>
+            <div class="form-group" style="margin-bottom: 0; display: flex; flex-direction: column;">
+                <label>Price</label>
+                <button type="button" class="pill-toggle {% if has_price == '1' %}active{% endif %}"
+                        id="priceToggle" onclick="togglePillFilter('has_price', '1')">
+                    {% if has_price == '1' %}Priced Only{% else %}Show All{% endif %}
+                </button>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Sort</label>
+                <div class="sort-row">
+                    <select id="search_sort" name="search_sort" onchange="changeSort(this.value)">
+                        <option value="">Default (Set / ID)</option>
+                        {% for val, label in [('set', 'Set'), ('card_id', 'Card ID'), ('name', 'Name'), ('color', 'Color'), ('rarity', 'Rarity'), ('cost', 'Cost'), ('power', 'Power'), ('counter', 'Counter'), ('type', 'Type'), ('block_icon', 'Block Icon'), ('price', 'Price')] %}
+                        <option value="{{ val }}" {% if sort == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-sm" id="orderToggle"
+                            onclick="toggleOrder()"
+                            style="padding:0.3rem 0.5rem;font-size:0.8rem;background:var(--bg-panel);color:var(--text);border:1px solid var(--bg-hover);border-radius:4px;"
+                            title="Toggle sort direction">
+                        {% if order == 'desc' %}&#9660; DESC{% else %}&#9650; ASC{% endif %}
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end; gap: 0.5rem;">
-            <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="{{ url_for('cards.cards') }}" class="btn btn-secondary">Clear</a>
+
+        <!-- Row 6: Filter / Clear buttons -->
+        <div class="filter-row" style="margin-top: 0.5rem;">
+            <div class="form-group" style="margin-bottom: 0; display: flex; gap: 0.5rem; align-items: flex-end;">
+                <button type="submit" class="btn btn-primary" style="font-size:0.85rem;padding:0.4rem 1rem;">Filter</button>
+                <a href="{{ url_for('cards.cards') }}" class="btn btn-secondary" style="font-size:0.85rem;padding:0.4rem 1rem;">Clear</a>
+            </div>
         </div>
     </form>
 </div>
 
-<!-- Cards count + Per-page selector + View toggle row -->
+<!-- Cards count -->
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
-<p style="color: var(--text-muted); margin: 0;">
-    Showing {{ pagination.items|length }} of {{ pagination.total }} cards
-    {% if per_page < pagination.total %}(Page {{ pagination.page }} of {{ pagination.pages }}){% endif %}
-</p>
-
-<div style="display:flex;align-items:center;gap:0.5rem;">
-    <label for="per_page" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap;">Per page:</label>
-    <select id="per_page" name="per_page" onchange="changePerPage(this.value)" style="padding:0.3rem 0.5rem;font-size:0.85rem;width:auto;background-color:var(--bg-panel);color:var(--text);border:1px solid var(--bg-hover);border-radius:4px;">
-        {% for n in [50, 100, 250, 500, 1000] %}
-        <option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>
-        {% endfor %}
-    </select>
-
-    <span style="color:var(--text-muted);font-size:0.85rem;">View:</span>
-    <button id="viewGridBtn" class="btn btn-sm" onclick="toggleView('grid')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'list' %}opacity:0.5;background:var(--bg-hover);{% endif %}">Grid</button>
-    <button id="viewListBtn" class="btn btn-sm" onclick="toggleView('list')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'grid' %}opacity:0.5;background:var(--bg-hover);{% endif %}">List</button>
-
-    <span id="gridColSlider" style="{% if view == 'list' %}display:none;{% endif %}display:flex;align-items:center;gap:0.35rem;margin-left:0.5rem;">
-        <label for="gridCols" style="color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">Columns:</label>
-        <input type="range" id="gridCols" min="1" max="10" value="0" oninput="updateGridCols(this.value)" style="width:80px;accent-color:var(--accent);" title="Grid columns">
-        <span id="gridColsLabel" style="color:var(--gold);font-size:0.8rem;min-width:18px;">auto</span>
-    </span>
+    <p style="color: var(--text-muted); margin: 0;">
+        Showing {{ pagination.items|length }} of {{ pagination.total }} cards
+        {% if per_page < pagination.total %}(Page {{ pagination.page }} of {{ pagination.pages }}){% endif %}
+    </p>
 </div>
+
+<!-- TOP Pagination -->
+{% if pagination.pages > 1 %}
+<div class="pagination pagination-top">
+    {% if pagination.has_prev %}
+    <a href="?{{ query_string_no_page }}&page={{ pagination.prev_num }}">&laquo; Prev</a>
+    {% endif %}
+    {% for p in range(max(1, pagination.page - 2), min(pagination.pages, pagination.page + 2) + 1) %}
+    {% if p == pagination.page %}
+    <span class="current">{{ p }}</span>
+    {% else %}
+    <a href="?{{ query_string_no_page }}&page={{ p }}">{{ p }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <a href="?{{ query_string_no_page }}&page={{ pagination.next_num }}">Next &raquo;</a>
+    {% endif %}
 </div>
+{% endif %}
 
 <!-- Card Grid -->
 <div class="card-grid" id="cardGridView" style="{% if view == 'list' %}display:none;{% endif %}">
     {% for card in cards %}
-    <div class="card-item" onclick="openCardDetail('{{ card.opcar_opset_id }}', '{{ card.opcar_id }}', '{{ card.opcar_version }}', '{{ card.opcar_name|e }}', '{{ card.opcar_category or '' }}', '{{ card.opcar_cost or '' }}', '{{ card.opcar_power or '' }}', '{{ card.opcar_counter or '' }}', '{{ card.opcar_attribute or '' }}', '{{ card.opcar_type or '' }}', '{{ card.opcar_effect or '' }}', '{{ card.opcar_banned or '' }}', '{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}', '{{ card.image_src or '' }}')">
+    <div class="card-item"
+         data-set-id="{{ card.opcar_opset_id }}"
+         data-card-id="{{ card.opcar_id }}"
+         data-version="{{ card.opcar_version }}"
+         data-name="{{ card.opcar_name|e }}"
+         data-category="{{ card.opcar_category or '' }}"
+         data-cost="{{ card.opcar_cost if card.opcar_cost is not none else '' }}"
+         data-power="{{ card.opcar_power if card.opcar_power is not none else '' }}"
+         data-counter="{{ card.opcar_counter if card.opcar_counter is not none else '' }}"
+         data-attribute="{{ card.opcar_attribute or '' }}"
+         data-type="{{ card.opcar_type or '' }}"
+         data-effect="{{ card.opcar_effect or ''|e }}"
+         data-banned="{{ card.opcar_banned if card.opcar_banned is not none else '' }}"
+         data-block-icon="{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}"
+         data-image-src="{{ card.image_src or '' }}">
         {% if card.image_src %}
         <img src="{{ card.image_src }}" alt="{{ card.opcar_name }}" loading="lazy"
              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22280%22><rect fill=%22%231a1a2e%22 width=%22200%22 height=%22280%22/><text fill=%22%23888%22 x=%22100%22 y=%22140%22 text-anchor=%22middle%22 font-size=%2214%22>No Image</text></svg>'">
         {% else %}
-        <div style="width:100%;height:280px;background:var(--bg-panel);display:flex;align-items:center;justify-content:center;color:var(--text-muted);">No Image</div>
+        <div style="width:100%;aspect-ratio:5/7;background:var(--bg-panel);display:flex;align-items:center;justify-content:center;color:var(--text-muted);">No Image</div>
         {% endif %}
         <div class="card-info">
             <div class="card-id">{{ card.opcar_id }}{% if card.opcar_version and card.opcar_version != 'p0' %}_{{ card.opcar_version }}{% endif %}{% if price_map.get((card.opcar_opset_id, card.opcar_id, card.opcar_version)) %} <span class="price-badge">{{ price_map[(card.opcar_opset_id, card.opcar_id, card.opcar_version)] }}</span>{% endif %}</div>
@@ -329,7 +594,22 @@
         </thead>
         <tbody>
             {% for card in cards %}
-            <tr onclick="openCardDetail('{{ card.opcar_opset_id }}', '{{ card.opcar_id }}', '{{ card.opcar_version }}', '{{ card.opcar_name|e }}', '{{ card.opcar_category or '' }}', '{{ card.opcar_cost or '' }}', '{{ card.opcar_power or '' }}', '{{ card.opcar_counter or '' }}', '{{ card.opcar_attribute or '' }}', '{{ card.opcar_type or '' }}', '{{ card.opcar_effect or '' }}', '{{ card.opcar_banned or '' }}', '{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}', '{{ card.image_src or '' }}')" style="cursor:pointer;">
+            <tr class="card-list-item"
+                data-set-id="{{ card.opcar_opset_id }}"
+                data-card-id="{{ card.opcar_id }}"
+                data-version="{{ card.opcar_version }}"
+                data-name="{{ card.opcar_name|e }}"
+                data-category="{{ card.opcar_category or '' }}"
+                data-cost="{{ card.opcar_cost if card.opcar_cost is not none else '' }}"
+                data-power="{{ card.opcar_power if card.opcar_power is not none else '' }}"
+                data-counter="{{ card.opcar_counter if card.opcar_counter is not none else '' }}"
+                data-attribute="{{ card.opcar_attribute or '' }}"
+                data-type="{{ card.opcar_type or '' }}"
+                data-effect="{{ card.opcar_effect or ''|e }}"
+                data-banned="{{ card.opcar_banned if card.opcar_banned is not none else '' }}"
+                data-block-icon="{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}"
+                data-image-src="{{ card.image_src or '' }}"
+                style="cursor:pointer;">
                 <td>
                     {% if card.image_src %}
                     <div class="thumb-container" style="background-image:url('{{ card.image_src }}');">
@@ -353,22 +633,21 @@
     </table>
 </div>
 
-<!-- Pagination -->
+<!-- BOTTOM Pagination -->
 {% if pagination.pages > 1 %}
 <div class="pagination">
-    {% set qs = request.query_string.decode('utf-8') if request.query_string else '' %}
     {% if pagination.has_prev %}
-    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ pagination.prev_num) if 'page=' in qs else (qs ~ '&page=' ~ pagination.prev_num|string if qs else 'page=' ~ pagination.prev_num|string) }}">&laquo; Prev</a>
+    <a href="?{{ query_string_no_page }}&page={{ pagination.prev_num }}">&laquo; Prev</a>
     {% endif %}
     {% for p in range(max(1, pagination.page - 2), min(pagination.pages, pagination.page + 2) + 1) %}
     {% if p == pagination.page %}
     <span class="current">{{ p }}</span>
     {% else %}
-    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ p) if 'page=' in qs else (qs ~ '&page=' ~ p|string if qs else 'page=' ~ p|string) }}">{{ p }}</a>
+    <a href="?{{ query_string_no_page }}&page={{ p }}">{{ p }}</a>
     {% endif %}
     {% endfor %}
     {% if pagination.has_next %}
-    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ pagination.next_num) if 'page=' in qs else (qs ~ '&page=' ~ pagination.next_num|string if qs else 'page=' ~ pagination.next_num|string) }}">Next &raquo;</a>
+    <a href="?{{ query_string_no_page }}&page={{ pagination.next_num }}">Next &raquo;</a>
     {% endif %}
 </div>
 {% endif %}
@@ -506,23 +785,125 @@
 
 {% block extra_js %}
 <script>
+// ============================================================
+// Filter functions
+// ============================================================
+
+function buildFilterParams() {
+    var params = new URLSearchParams(window.location.search);
+
+    // Text/select inputs from the form
+    function setIfVal(name) {
+        var el = document.querySelector('#filterForm [name="' + name + '"]');
+        if (el && el.value !== '') {
+            params.set(name, el.value);
+        } else {
+            params.delete(name);
+        }
+    }
+    setIfVal('search_name');
+    setIfVal('search_set');
+    setIfVal('search_type');
+    setIfVal('min_cost');
+    setIfVal('max_cost');
+    setIfVal('min_power');
+    setIfVal('max_power');
+    setIfVal('min_counter');
+    setIfVal('max_counter');
+    setIfVal('min_block_icon');
+    setIfVal('max_block_icon');
+
+    // Hidden toggle inputs
+    function setHidden(param) {
+        var el = document.getElementById('inp_' + param);
+        if (el && el.value !== '') {
+            params.set(param, el.value);
+        } else {
+            params.delete(param);
+        }
+    }
+    setHidden('search_color');
+    setHidden('search_category');
+    setHidden('search_rarity');
+    setHidden('search_banned');
+    setHidden('has_price');
+    setHidden('sort');
+    setHidden('order');
+
+    return params;
+}
+
+function applyFilters() {
+    var params = buildFilterParams();
+    params.set('page', '1');
+    window.location.href = '?' + params.toString();
+    return false;
+}
+
+// Toggle a color in the multi-select color filter
+function toggleColorFilter(color) {
+    var inp = document.getElementById('inp_search_color');
+    var vals = inp.value ? inp.value.split(',').map(function(s) { return s.trim(); }) : [];
+    var idx = vals.indexOf(color);
+    if (idx >= 0) {
+        vals.splice(idx, 1);
+    } else {
+        vals.push(color);
+    }
+    inp.value = vals.join(',');
+    applyFilters();
+}
+
+// Single-select toggle for category/rarity
+function selectSingleFilter(param, value) {
+    var inp = document.getElementById('inp_' + param);
+    inp.value = (inp.value === value) ? '' : value;
+    applyFilters();
+}
+
+// Pill toggle (banned, has_price)
+function togglePillFilter(param, value) {
+    var inp = document.getElementById('inp_' + param);
+    inp.value = (inp.value === value) ? '' : value;
+    applyFilters();
+}
+
+// Sort change
+function changeSort(value) {
+    var inpSort = document.getElementById('inp_sort');
+    inpSort.value = value;
+    applyFilters();
+}
+
+// Toggle order ASC/DESC
+function toggleOrder() {
+    var inpOrder = document.getElementById('inp_order');
+    inpOrder.value = (inpOrder.value === 'desc') ? 'asc' : 'desc';
+    applyFilters();
+}
+
+// ============================================================
+// Per-page + View toggle
+// ============================================================
+
 function changePerPage(value) {
-    const params = new URLSearchParams(window.location.search);
+    var params = buildFilterParams();
     params.set('per_page', value);
-    params.set('page', '1');   // reset to page 1
-    window.history.replaceState(null, '', '?' + params.toString());
+    params.set('page', '1');
     window.location.href = '?' + params.toString();
 }
 
 function toggleView(view) {
-    const params = new URLSearchParams(window.location.search);
+    var params = buildFilterParams();
     params.set('view', view);
     params.set('page', '1');
-    window.history.replaceState(null, '', '?' + params.toString());
     window.location.href = '?' + params.toString();
 }
 
+// ============================================================
 // Grid column slider
+// ============================================================
+
 function updateGridCols(value) {
     document.getElementById('gridColsLabel').textContent = value;
     var grid = document.getElementById('cardGridView');
@@ -534,7 +915,6 @@ function updateGridCols(value) {
     try { localStorage.setItem('opapp-grid-cols', value); } catch(e) {}
 }
 
-// On page load, restore grid cols from localStorage
 (function() {
     var saved = localStorage.getItem('opapp-grid-cols');
     if (saved && parseInt(saved) >= 1 && parseInt(saved) <= 10) {
@@ -546,20 +926,61 @@ function updateGridCols(value) {
     }
 })();
 
+// ============================================================
+// Card Detail Modal — uses data-* attributes (BUG 2 fix)
+// ============================================================
+
+function openCardDetailFromElement(el) {
+    openCardDetail(
+        el.getAttribute('data-set-id'),
+        el.getAttribute('data-card-id'),
+        el.getAttribute('data-version'),
+        el.getAttribute('data-name'),
+        el.getAttribute('data-category'),
+        el.getAttribute('data-cost'),
+        el.getAttribute('data-power'),
+        el.getAttribute('data-counter'),
+        el.getAttribute('data-attribute'),
+        el.getAttribute('data-type'),
+        el.getAttribute('data-effect'),
+        el.getAttribute('data-banned'),
+        el.getAttribute('data-block-icon'),
+        el.getAttribute('data-image-src')
+    );
+}
+
+// Attach click handlers to all card items in grid and list view
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('#cardGridView .card-item, #cardListView .card-list-item').forEach(function(el) {
+        el.addEventListener('click', function(e) {
+            // Don't trigger if clicking the thumb container (it has its own hover behavior)
+            if (e.target.closest('.thumb-container')) return;
+            openCardDetailFromElement(el);
+        });
+    });
+    // For list view rows, clicking the thumb container should also open detail
+    document.querySelectorAll('#cardListView .thumb-container').forEach(function(container) {
+        container.addEventListener('click', function(e) {
+            var row = container.closest('.card-list-item');
+            if (row) openCardDetailFromElement(row);
+        });
+    });
+});
+
 function openCardDetail(setId, cardId, version, name, category, cost, power, counter, attribute, type, effect, banned, blockIcon, imageSrc) {
     document.getElementById('detailName').textContent = name;
     document.getElementById('detailSetId').textContent = setId + ' / ' + cardId;
     document.getElementById('detailVersion').textContent = version || 'p0';
     document.getElementById('detailCategory').textContent = category;
-    document.getElementById('detailBanned').textContent = banned ? banned : 'No';
-    document.getElementById('detailBlock').textContent = blockIcon !== '' ? blockIcon : '-';
+    document.getElementById('detailBanned').textContent = banned || 'No';
+    document.getElementById('detailBlock').textContent = (blockIcon !== '' && blockIcon !== 'None') ? blockIcon : '-';
     document.getElementById('detailCost').textContent = cost;
     document.getElementById('detailPower').textContent = power;
     document.getElementById('detailCounter').textContent = counter;
     document.getElementById('detailAttribute').textContent = attribute;
     document.getElementById('detailType').textContent = type;
     document.getElementById('detailEffect').textContent = effect;
-    const img = document.getElementById('detailImage');
+    var img = document.getElementById('detailImage');
     if (imageSrc) {
         img.src = imageSrc;
         img.style.display = 'block';
@@ -573,7 +994,10 @@ document.getElementById('cardDetailModal').addEventListener('click', function(e)
     if (e.target === this) this.classList.remove('active');
 });
 
+// ============================================================
 // Add Card Modal
+// ============================================================
+
 function openAddCardModal() {
     document.getElementById('cardAddModal').classList.add('active');
     document.getElementById('addCardForm').reset();

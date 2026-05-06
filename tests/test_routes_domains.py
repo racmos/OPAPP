@@ -708,6 +708,294 @@ class TestCardsRoutes:
         assert 'cardAddModal' in html or 'addCardModal' in html
         assert 'opcar_name' in html or 'name="opcar_name"' in html
 
+    # --- Cards Page Fixes: BUG 2 (data attributes) ---
+
+    def test_cards_detail_uses_data_attributes(self, app, client):
+        """Card detail modal uses data-* attributes instead of inline onclick strings."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Test Card', 'Leader', 'Red', 'Leader')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        # Should use data attributes, not inline openCardDetail with template strings
+        assert 'data-set-id' in html
+        assert 'data-card-id' in html
+        assert 'data-name' in html
+        # Should NOT have the old onclick pattern with inline quotes
+        assert "onclick=\"openCardDetail('" not in html
+
+    # --- Cards Page Fixes: BUG 6 (top pagination) ---
+
+    def test_cards_pagination_at_top(self, app, client):
+        """Pagination navigation appears above the card grid too."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            for i in range(60):
+                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
+                           f'Card {i+1}', 'Character', 'Red', 'Common')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        # Check that pagination-top class exists (top pagination)
+        assert 'pagination-top' in html
+
+    # --- FEAT 1: Color ILIKE for multi-color cards ---
+
+    def test_cards_color_ilike_multi_color_match(self, app, client):
+        """?search_color=Red matches cards with 'Red/Blue' (ILIKE partial match)."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'RedBlue Leader', 'Leader', 'Red/Blue', 'Leader')
+            _seed_card(app, 'OP01', 'OP01-002', 'Green Card', 'Character', 'Green', 'Rare')
+        resp = client.get('/onepiecetcg/cards?search_color=Red')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'RedBlue Leader' in html
+        assert 'Green Card' not in html
+
+    def test_cards_color_ilike_multiple_selected(self, app, client):
+        """?search_color=Red,Blue matches both Red/Blue and pure Blue cards."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Multi Card', 'Leader', 'Red/Blue', 'Leader')
+            _seed_card(app, 'OP01', 'OP01-002', 'Blue Card', 'Character', 'Blue', 'Rare')
+            _seed_card(app, 'OP01', 'OP01-003', 'Green Card', 'Character', 'Green', 'Common')
+        resp = client.get('/onepiecetcg/cards?search_color=Red,Blue')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'Multi Card' in html
+        assert 'Blue Card' in html
+        assert 'Green Card' not in html
+
+    # --- FEAT 2: Category and Rarity as toggle buttons (tested via UI) ---
+
+    def test_cards_category_toggle_buttons_in_html(self, app, client):
+        """Category filter shows toggle buttons, not a dropdown."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        # Should have toggle button group and hidden input
+        assert 'toggle-btn-group' in html
+        assert 'inp_search_category' in html
+        assert 'toggle-btn' in html or 'selectSingleFilter' in html
+
+    def test_cards_rarity_toggle_buttons_in_html(self, app, client):
+        """Rarity filter shows toggle buttons, not a dropdown."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'inp_search_rarity' in html
+
+    # --- FEAT 3: Additional filters ---
+
+    def test_cards_filter_block_icon_range(self, app, client):
+        """?min_block_icon=1&max_block_icon=3 filters by block icon range."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            c1 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-001', opcar_version='p0',
+                        opcar_name='Blocker 1', opcar_category='Character',
+                        opcar_color='Red', opcar_rarity='Common',
+                        opcar_block_icon=1)
+            c2 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-002', opcar_version='p0',
+                        opcar_name='Blocker 2', opcar_category='Character',
+                        opcar_color='Blue', opcar_rarity='Common',
+                        opcar_block_icon=2)
+            c3 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-003', opcar_version='p0',
+                        opcar_name='Blocker 5', opcar_category='Character',
+                        opcar_color='Green', opcar_rarity='Rare',
+                        opcar_block_icon=5)
+            db.session.add_all([c1, c2, c3])
+            db.session.commit()
+        resp = client.get('/onepiecetcg/cards?min_block_icon=1&max_block_icon=3')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'Blocker 1' in html
+        assert 'Blocker 2' in html
+        assert 'Blocker 5' not in html
+
+    def test_cards_filter_banned_toggle(self, app, client):
+        """?search_banned=1 shows only banned cards."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            c1 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-001', opcar_version='p0',
+                        opcar_name='Banned Card', opcar_category='Character',
+                        opcar_color='Red', opcar_rarity='Common', opcar_banned='Y')
+            c2 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-002', opcar_version='p0',
+                        opcar_name='Legal Card', opcar_category='Character',
+                        opcar_color='Blue', opcar_rarity='Common')
+            db.session.add_all([c1, c2])
+            db.session.commit()
+        resp = client.get('/onepiecetcg/cards?search_banned=1')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'Banned Card' in html
+        assert 'Legal Card' not in html
+
+    def test_cards_filter_has_price_toggle(self, app, client):
+        """?has_price=1 shows only cards with a price mapping."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Priced Card', 'Character', 'Red', 'Common')
+            _seed_card(app, 'OP01', 'OP01-002', 'No Price Card', 'Character', 'Blue', 'Common')
+
+            # Create price data for OP01-001 only
+            from app.models.cardmarket import OpcmProductCardMap, OpcmPrice
+            import datetime
+            today = datetime.date.today().strftime('%Y%m%d')
+            pmap = OpcmProductCardMap(
+                oppcm_id_product=99901,
+                oppcm_opset_id='OP01',
+                oppcm_opcar_id='OP01-001',
+                oppcm_opcar_version='p0',
+                oppcm_foil=None
+            )
+            price = OpcmPrice(
+                opprc_date=today,
+                opprc_id_product=99901,
+                opprc_low=1.23
+            )
+            db.session.add_all([pmap, price])
+            db.session.commit()
+        resp = client.get('/onepiecetcg/cards?has_price=1')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'Priced Card' in html
+        assert 'No Price Card' not in html
+
+    def test_cards_filter_banned_pill_in_html(self, app, client):
+        """Banned filter pill toggle is present in the UI."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'inp_search_banned' in html
+        assert 'bannedToggle' in html or 'togglePillFilter' in html
+
+    def test_cards_filter_price_pill_in_html(self, app, client):
+        """Price filter pill toggle is present in the UI."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'inp_has_price' in html
+        assert 'priceToggle' in html or 'togglePillFilter' in html
+
+    # --- FEAT 4: Sort ---
+
+    def test_cards_sort_by_name_asc(self, app, client):
+        """?sort=name&order=asc orders by name ascending."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Zoro', 'Character', 'Green', 'Rare')
+            _seed_card(app, 'OP01', 'OP01-002', 'Ace', 'Character', 'Red', 'Leader')
+        resp = client.get('/onepiecetcg/cards?sort=name&order=asc')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        # Ace should appear before Zoro in the HTML
+        ace_pos = html.find('Ace')
+        zoro_pos = html.find('Zoro')
+        assert ace_pos > 0 and zoro_pos > 0
+        assert ace_pos < zoro_pos, "Ace should appear before Zoro when sorted ASC"
+
+    def test_cards_sort_by_cost_desc(self, app, client):
+        """?sort=cost&order=desc orders by cost descending."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Cheap', 'Character', 'Red', 'Common', cost=1)
+            _seed_card(app, 'OP01', 'OP01-002', 'Expensive', 'Character', 'Blue', 'Rare', cost=9)
+            _seed_card(app, 'OP01', 'OP01-003', 'Medium', 'Character', 'Green', 'Common', cost=5)
+        resp = client.get('/onepiecetcg/cards?sort=cost&order=desc')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        exp_pos = html.find('Expensive')
+        cheap_pos = html.find('Cheap')
+        assert exp_pos > 0 and cheap_pos > 0
+        assert exp_pos < cheap_pos, "Expensive (cost 9) should appear before Cheap (cost 1) when sorted DESC"
+
+    def test_cards_sort_default(self, app, client):
+        """No sort param → default sort by set + card ID."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_set(app, 'OP02', 'Paramount War')
+            _seed_card(app, 'OP02', 'OP02-001', 'First OP02', 'Character', 'Red', 'Common')
+            _seed_card(app, 'OP01', 'OP01-001', 'First OP01', 'Character', 'Blue', 'Common')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        op01_pos = html.find('OP01')
+        op02_pos = html.find('OP02')
+        # Default: OP01 comes before OP02
+        assert op01_pos > 0 and op02_pos > 0
+        assert op01_pos < op02_pos, "Default sort: OP01 (set) should appear before OP02"
+
+    def test_cards_sort_dropdown_in_html(self, app, client):
+        """Sort dropdown and asc/desc toggle are present in UI."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'inp_sort' in html or 'search_sort' in html
+        assert 'inp_order' in html or 'orderToggle' in html
+
+    def test_cards_block_icon_range_inputs_in_html(self, app, client):
+        """Block icon min/max range inputs are present in UI."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'min_block_icon' in html
+        assert 'max_block_icon' in html
+
+    def test_cards_type_search_input_in_html(self, app, client):
+        """Type text search input is present in UI."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+        resp = client.get('/onepiecetcg/cards')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'search_type' in html
+
+    def test_cards_pagination_preserves_sort(self, app, client):
+        """Pagination links preserve sort and order params."""
+        with app.app_context():
+            _login(client)
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            for i in range(60):
+                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
+                           f'Card {i+1}', 'Character', 'Red', 'Common')
+        resp = client.get('/onepiecetcg/cards?sort=cost&order=desc&per_page=50&page=1')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        # Pagination links should preserve sort= and order=
+        assert 'sort=cost' in html or 'sort%3Dcost' in html
+
 
 # ============================================================
 # 3.5 Collection Routes
