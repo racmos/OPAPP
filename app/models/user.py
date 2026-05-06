@@ -1,12 +1,14 @@
-from app import db
 from datetime import datetime
-from werkzeug.security import generate_password_hash, check_password_hash
+
 from flask_login import UserMixin
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from app import db
 
 
 class OpUser(UserMixin, db.Model):
     __tablename__ = 'opusers'
-    __table_args__ = {"schema": "onepiecetcg"}
+    __table_args__ = {'schema': 'onepiecetcg'}
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), index=True, unique=True, nullable=False)

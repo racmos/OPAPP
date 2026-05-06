@@ -1,9 +1,11 @@
-from flask import Flask
-from config import Config
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
-from werkzeug.middleware.proxy_fix import ProxyFix
 import os
+
+from flask import Flask
+from flask_login import LoginManager
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+from config import Config
 
 db = SQLAlchemy()
 login = LoginManager()
@@ -14,9 +16,7 @@ def create_app(config_class=Config, **test_config):
     # Get the absolute path to the app directory
     app_dir = os.path.dirname(os.path.abspath(__file__))
 
-    app = Flask(__name__,
-                static_folder=os.path.join(app_dir, 'static'),
-                static_url_path='/onepiecetcg/static')
+    app = Flask(__name__, static_folder=os.path.join(app_dir, 'static'), static_url_path='/onepiecetcg/static')
     app.config.from_object(config_class)
 
     # Apply test configuration overrides before initializing extensions
@@ -28,11 +28,11 @@ def create_app(config_class=Config, **test_config):
     if db_uri.startswith('sqlite'):
         app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
         # SQLite does not support schemas — patch all model __table_args__
-        from sqlalchemy import event
-        from sqlalchemy.engine import Engine
+        import re
         import sqlite3
 
-        import re
+        from sqlalchemy import event
+        from sqlalchemy.engine import Engine
 
         def _regexp_replace(value, pattern, replacement, flags=''):
             """SQLite shim for PostgreSQL regexp_replace(value, pattern, replacement, flags)."""
@@ -51,14 +51,16 @@ def create_app(config_class=Config, **test_config):
                 dbapi_conn.create_function('regexp_replace', 3, _regexp_replace)
                 cursor = dbapi_conn.cursor()
                 # Attach onepiecetcg schema if not already attached
-                cursor.execute("PRAGMA database_list")
+                cursor.execute('PRAGMA database_list')
                 attached = {row[1] for row in cursor.fetchall()}
                 if 'onepiecetcg' not in attached:
                     cursor.execute('ATTACH DATABASE ":memory:" AS onepiecetcg')
                 cursor.close()
 
     # Make min/max available in all templates
-    from builtins import min as _min, max as _max
+    from builtins import max as _max
+    from builtins import min as _min
+
     app.jinja_env.globals['min'] = _min
     app.jinja_env.globals['max'] = _max
 
@@ -69,21 +71,24 @@ def create_app(config_class=Config, **test_config):
 
     # Register auth blueprint
     from app.routes.auth import auth_bp
+
     app.register_blueprint(auth_bp)
 
     # Register main blueprint (dashboard)
     from app.routes.routes import main_bp
+
     app.register_blueprint(main_bp)
 
     # Register domain blueprints
     from app.routes.domains import (
-        sets_bp,
         cards_bp,
         collection_bp,
         deck_bp,
         price_bp,
         profile_bp,
+        sets_bp,
     )
+
     app.register_blueprint(sets_bp)
     app.register_blueprint(cards_bp)
     app.register_blueprint(collection_bp)
@@ -99,6 +104,7 @@ def create_app(config_class=Config, **test_config):
 
     # Register error handlers
     from app.errors import register_error_handlers
+
     register_error_handlers(app)
 
     return app

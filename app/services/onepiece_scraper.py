@@ -3,6 +3,7 @@ One Piece Card scraper.
 Fetches card data + images from https://en.onepiece-cardgame.com/cardlist/
 Inserts into opcards table and saves images to app/static/images/cards/<set_id>/
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,18 +15,19 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 from flask import current_app
+
 from app import db
 from app.models import OpCard, OpSet
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://en.onepiece-cardgame.com"
-CARD_LIST_URL = f"{BASE_URL}/cardlist/"
+BASE_URL = 'https://en.onepiece-cardgame.com'
+CARD_LIST_URL = f'{BASE_URL}/cardlist/'
 
 _HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                  'AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/120.0.0.0 Safari/537.36',
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Connection': 'keep-alive',
@@ -64,7 +66,7 @@ def _normalize_set_name(code: str, label: str) -> str:
 
 def _derive_opset_id(card_id_prefix: str) -> str:
     """Convert card ID prefix to opset_id format.
-    
+
     Examples:
         OP01 -> OP-01
         EB04 -> EB-04
@@ -74,7 +76,7 @@ def _derive_opset_id(card_id_prefix: str) -> str:
     """
     m = re.match(r'^([A-Za-z]+)(\d+)$', card_id_prefix)
     if m:
-        return f"{m.group(1)}-{m.group(2)}"
+        return f'{m.group(1)}-{m.group(2)}'
     return card_id_prefix
 
 
@@ -102,8 +104,7 @@ def _split_card_id_version(card_id_full: str) -> tuple[str, str]:
     return match.group('base'), (match.group('version') or 'p0')
 
 
-def _parse_card_dl(dl_element, set_id: str, value_id: str,
-                   set_code_override: Optional[str] = None) -> Optional[dict]:
+def _parse_card_dl(dl_element, set_id: str, value_id: str, set_code_override: Optional[str] = None) -> Optional[dict]:
     """Parse a <dl class='modalCol'> element into a card dict.
 
     Args:
@@ -127,10 +128,9 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
     # Format 3: "ST01-001" (letters+digits-digits) — starter decks
     m = re.match(r'^([A-Za-z]+\d*)-(\d+[a-zA-Z]*)$', base_card_id)
     if not m:
-        logger.warning(f"Cannot parse card ID format: {card_id_full}")
+        logger.warning(f'Cannot parse card ID format: {card_id_full}')
         return None
     card_id_prefix = m.group(1)  # e.g., "OP01", "EB04", "P", "ST01"
-    card_number = m.group(2)     # e.g., "001", "044"
 
     # Use set_code_override if provided (e.g. PRB-02 from dropdown label),
     # otherwise derive from card_id prefix (fallback for legacy/tests)
@@ -248,17 +248,15 @@ def _parse_card_dl(dl_element, set_id: str, value_id: str,
 
     # Card Set(s)
     getinfo_el = dl_element.select_one('.getInfo')
-    card_set_str = None
     if getinfo_el:
         set_text = getinfo_el.get_text(separator=' ', strip=True)
         h3 = getinfo_el.find('h3')
         if h3:
             set_text = set_text.replace(h3.get_text(strip=True), '', 1).strip()
-        card_set_str = set_text or None
 
     # Image URL
-    image_filename = f"{card_id_full}.png"
-    image_url = f"{BASE_URL}/images/cardlist/card/{card_id_full}.png"
+    image_filename = f'{card_id_full}.png'
+    image_url = f'{BASE_URL}/images/cardlist/card/{card_id_full}.png'
 
     # For variant cards, the PK (opcar_opset_id + opcar_id) includes the variant suffix
     # e.g., "001" for normal, "001_p1" for variant
@@ -296,13 +294,14 @@ def _download_image(session: requests.Session, url: str, dest_path: str) -> bool
             f.write(resp.content)
         return True
     except Exception as e:
-        logger.warning(f"Image download failed {url}: {e}")
+        logger.warning(f'Image download failed {url}: {e}')
         return False
 
 
 # ──────────────────────────────────────────────
 # Public API
 # ──────────────────────────────────────────────
+
 
 def refresh_op_sets() -> dict:
     """
@@ -331,12 +330,14 @@ def refresh_op_sets() -> dict:
             code = _parse_set_code_from_label(label)
             normalized_name = _normalize_set_name(code, label)
 
-            sets.append({
-                'id': value,
-                'label': label,
-                'code': code,
-                'name': normalized_name,
-            })
+            sets.append(
+                {
+                    'id': value,
+                    'label': label,
+                    'code': code,
+                    'name': normalized_name,
+                }
+            )
 
         return {
             'success': True,
@@ -344,7 +345,7 @@ def refresh_op_sets() -> dict:
             'count': len(sets),
         }
     except Exception as e:
-        logger.error(f"refresh_op_sets failed: {e}")
+        logger.error(f'refresh_op_sets failed: {e}')
         return {'success': False, 'message': str(e), 'sets': []}
 
 
@@ -407,7 +408,9 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
         set_code = set_info.get('code') if isinstance(set_info, dict) else None
         set_name = set_info.get('name') if isinstance(set_info, dict) else None
         step_label = f'{step_idx}. Fetch {set_code or value_id}'
-        steps.append({'step': step_label, 'status': 'RUNNING', 'message': f'Fetching cards for {set_code or value_id}...'})
+        steps.append(
+            {'step': step_label, 'status': 'RUNNING', 'message': f'Fetching cards for {set_code or value_id}...'}
+        )
         try:
             # Use GET with query param (all cards returned in single page)
             resp = session.get(
@@ -473,11 +476,13 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
                 set_name = summary.get('name', opset_id)
                 set_ncard = summary.get('ncard')
                 if not existing:
-                    db.session.add(OpSet(
-                        opset_id=opset_id,
-                        opset_name=set_name,
-                        opset_ncard=set_ncard,
-                    ))
+                    db.session.add(
+                        OpSet(
+                            opset_id=opset_id,
+                            opset_name=set_name,
+                            opset_ncard=set_ncard,
+                        )
+                    )
                     stats['sets_created'] += 1
                 else:
                     existing.opset_name = set_name
@@ -517,9 +522,9 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
 
         steps[-1]['status'] = 'SUCCESS'
         steps[-1]['message'] = (
-            f"Downloaded {stats['images_downloaded']} new, "
-            f"{stats['images_existed']} existed, "
-            f"{stats['images_failed']} failed"
+            f'Downloaded {stats["images_downloaded"]} new, '
+            f'{stats["images_existed"]} existed, '
+            f'{stats["images_failed"]} failed'
         )
     except Exception as e:
         steps[-1]['status'] = 'ERROR'
@@ -575,11 +580,7 @@ def extract_op_cards(filter_sets: list[dict] | list[str] | None = None) -> dict:
 
         db.session.commit()
         steps[-1]['status'] = 'SUCCESS'
-        steps[-1]['message'] = (
-            f"Inserted {stats['inserted']}, "
-            f"updated {stats['updated']}, "
-            f"unchanged {stats['skipped']}"
-        )
+        steps[-1]['message'] = f'Inserted {stats["inserted"]}, updated {stats["updated"]}, unchanged {stats["skipped"]}'
     except Exception as e:
         db.session.rollback()
         steps[-1]['status'] = 'ERROR'

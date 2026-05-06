@@ -16,10 +16,10 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
     # PostgreSQL connection string with psycopg driver
     # Format: postgresql+psycopg://user:password@host:port/database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'postgresql+psycopg://postgres:abcd1234@192.168.1.33:5432/postgres'
+    SQLALCHEMY_DATABASE_URI = (
+        os.environ.get('DATABASE_URL') or 'postgresql+psycopg://postgres:abcd1234@192.168.1.33:5432/postgres'
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = _engine_options(
-        os.environ.get('DATABASE_URL') or
-        'postgresql+psycopg://postgres:abcd1234@192.168.1.33:5432/postgres'
+        os.environ.get('DATABASE_URL') or 'postgresql+psycopg://postgres:abcd1234@192.168.1.33:5432/postgres'
     )

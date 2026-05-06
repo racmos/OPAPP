@@ -14,6 +14,7 @@ def _image_folder(image_filename):
     if not image_filename:
         return ''
     import re
+
     # Strip known variant suffixes (_p1, _p2, _p3) before processing
     base = re.sub(r'_p\d+(?=\.)', '', image_filename)
     # Try dash-separated One Piece convention: OP01-001.png → OP01
@@ -28,7 +29,7 @@ def _image_folder(image_filename):
 
 class OpCard(db.Model):
     __tablename__ = 'opcards'
-    __table_args__ = {"schema": "onepiecetcg"}
+    __table_args__ = {'schema': 'onepiecetcg'}
 
     opcar_opset_id = db.Column(db.Text, primary_key=True)
     opcar_id = db.Column(db.Text, primary_key=True)
@@ -59,4 +60,4 @@ class OpCard(db.Model):
         if not self.image:
             return None
         folder = (self.opcar_opset_id or '').lower()
-        return f"/onepiecetcg/static/images/cards/{folder}/{self.image}"
+        return f'/onepiecetcg/static/images/cards/{folder}/{self.image}'

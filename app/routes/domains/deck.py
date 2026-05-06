@@ -1,9 +1,12 @@
 """
 Deck routes module.
 """
+
 from datetime import datetime
-from flask import Blueprint, render_template, request, jsonify, abort
-from flask_login import login_required, current_user
+
+from flask import Blueprint, abort, jsonify, render_template, request
+from flask_login import current_user, login_required
+
 from app import db
 from app.models import OpDeck
 from app.schemas.validators import DeckSave, validate_json
@@ -38,21 +41,18 @@ def deck():
     formats = ['Standard', 'Limited']
     modes = ['1v1', '2v2']
 
-    return render_template('deck.html',
-                           decks=pagination.items,
-                           pagination=pagination,
-                           formats=formats,
-                           modes=modes)
+    return render_template('deck.html', decks=pagination.items, pagination=pagination, formats=formats, modes=modes)
 
 
 @deck_bp.route('/view/<name>')
 @login_required
 def view_deck(name):
     """View deck detail by name (latest version)."""
-    deck_obj = OpDeck.query.filter(
-        OpDeck.opdck_name == name,
-        OpDeck.opdck_user == current_user.username
-    ).order_by(OpDeck.opdck_seq.desc()).first()
+    deck_obj = (
+        OpDeck.query.filter(OpDeck.opdck_name == name, OpDeck.opdck_user == current_user.username)
+        .order_by(OpDeck.opdck_seq.desc())
+        .first()
+    )
 
     if not deck_obj:
         abort(404)
@@ -76,10 +76,8 @@ def save_deck():
         for card in main_cards + sideboard:
             total_cards += card.get('qty', 0)
         cards_json = {
-            'main': [{'set': c.get('set'), 'id': c.get('id'), 'qty': c.get('qty')}
-                     for c in main_cards],
-            'sideboard': [{'set': c.get('set'), 'id': c.get('id'), 'qty': c.get('qty')}
-                          for c in sideboard]
+            'main': [{'set': c.get('set'), 'id': c.get('id'), 'qty': c.get('qty')} for c in main_cards],
+            'sideboard': [{'set': c.get('set'), 'id': c.get('id'), 'qty': c.get('qty')} for c in sideboard],
         }
 
     next_seq = OpDeck.get_next_seq(current_user.username, data.opdck_name)
@@ -100,12 +98,14 @@ def save_deck():
     db.session.add(new_deck)
     db.session.commit()
 
-    return jsonify({
-        'success': True,
-        'id': new_deck.id,
-        'name': new_deck.opdck_name,
-        'seq': new_deck.opdck_seq,
-    })
+    return jsonify(
+        {
+            'success': True,
+            'id': new_deck.id,
+            'name': new_deck.opdck_name,
+            'seq': new_deck.opdck_seq,
+        }
+    )
 
 
 @deck_bp.route('/delete', methods=['POST'])
@@ -118,9 +118,7 @@ def delete_deck():
     if not deck_id:
         return jsonify({'success': False, 'message': 'id required'}), 400
 
-    deck_obj = OpDeck.query.filter_by(
-        id=deck_id, opdck_user=current_user.username
-    ).first()
+    deck_obj = OpDeck.query.filter_by(id=deck_id, opdck_user=current_user.username).first()
 
     if not deck_obj:
         return jsonify({'success': False, 'message': 'Deck not found or not yours'}), 404

@@ -1,7 +1,9 @@
 """
 Tests for app/__init__.py — Flask factory function.
 """
+
 import pytest
+
 from app import create_app, db, login
 
 
@@ -17,6 +19,7 @@ class TestAppFactory:
         )
         assert app is not None
         from flask import Flask
+
         assert isinstance(app, Flask)
 
     def test_app_has_testing_config(self):
@@ -54,6 +57,7 @@ class TestAppFactory:
         """Database should be initialized with the app."""
         with app.app_context():
             from sqlalchemy import text
+
             result = db.session.execute(text('SELECT 1'))
             assert result.scalar() == 1
 
@@ -61,8 +65,9 @@ class TestAppFactory:
         """SQLite in-memory should have onepiecetcg schema attached."""
         with app.app_context():
             from sqlalchemy import text
+
             # Check that the onepiecetcg schema exists by listing attached databases
-            result = db.session.execute(text("PRAGMA database_list"))
+            result = db.session.execute(text('PRAGMA database_list'))
             databases = {row[1] for row in result.fetchall()}
             assert 'onepiecetcg' in databases
 
@@ -86,5 +91,6 @@ class TestAppFactory:
             SECRET_KEY='test',
         )
         from werkzeug.middleware.proxy_fix import ProxyFix
+
         # ProxyFix wraps wsgi_app — check by looking at the middleware chain
         assert app.wsgi_app is not None

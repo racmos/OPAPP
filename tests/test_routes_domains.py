@@ -2,50 +2,62 @@
 Integration tests for domain routes (sets, cards, collection, deck).
 Strict TDD: These tests are written BEFORE the production code.
 """
-import json
-import pytest
-from datetime import date
-from app import db
-from app.models import OpUser, OpSet, OpCard, OpCollection, OpDeck
 
+import json
+from datetime import date
+
+import pytest
+
+from app import db
+from app.models import OpCard, OpCollection, OpDeck, OpSet, OpUser
 
 # ============================================================
 # Helper: login user and return client
 # ============================================================
 
-def _login(client, email='domaintest@test.com', password='test123',
-           username='domaintest'):
+
+def _login(client, email='domaintest@test.com', password='test123', username='domaintest'):
     """Helper to create user + login. Returns user objects dict."""
     user = OpUser(username=username, email=email)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
 
-    resp = client.post('/onepiecetcg/login', data=json.dumps({
-        'email': email,
-        'password': password
-    }), content_type='application/json')
+    resp = client.post(
+        '/onepiecetcg/login', data=json.dumps({'email': email, 'password': password}), content_type='application/json'
+    )
     return user
 
 
-def _seed_set(app, set_id='OP01', set_name='Romance Dawn',
-              ncard=121, outdat='2022-12-02'):
+def _seed_set(app, set_id='OP01', set_name='Romance Dawn', ncard=121, outdat='2022-12-02'):
     """Seed a test set into the database."""
     s = OpSet(
         opset_id=set_id,
         opset_name=set_name,
         opset_ncard=ncard,
-        opset_outdat=date.fromisoformat(outdat) if outdat else None
+        opset_outdat=date.fromisoformat(outdat) if outdat else None,
     )
     db.session.add(s)
     db.session.commit()
     return s
 
 
-def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
-               category='Leader', color='Red', rarity='Leader',
-               cost=1, image='OP01-001.png', version='p0',
-               power=None, counter=None, effect=None, opcar_type=None):
+def _seed_card(
+    app,
+    set_id='OP01',
+    card_id='OP01-001',
+    name='Monkey D. Luffy',
+    category='Leader',
+    color='Red',
+    rarity='Leader',
+    cost=1,
+    image='OP01-001.png',
+    version='p0',
+    power=None,
+    counter=None,
+    effect=None,
+    opcar_type=None,
+):
     """Seed a test card into the database."""
     kwargs = dict(
         opcar_opset_id=set_id,
@@ -56,7 +68,7 @@ def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
         opcar_color=color,
         opcar_rarity=rarity,
         opcar_cost=cost,
-        image=image
+        image=image,
     )
     if power is not None:
         kwargs['opcar_power'] = power
@@ -75,6 +87,7 @@ def _seed_card(app, set_id='OP01', card_id='OP01-001', name='Monkey D. Luffy',
 # ============================================================
 # 3.1 Sets Routes
 # ============================================================
+
 
 class TestSetsRoutes:
     """Tests for /onepiecetcg/sets/ (sets_bp)."""
@@ -121,11 +134,11 @@ class TestSetsRoutes:
         """POST /onepiecetcg/sets/add creates a new set."""
         with app.app_context():
             _login(client)
-        resp = client.post('/onepiecetcg/sets/add', data=json.dumps({
-            'opset_id': 'OP03',
-            'opset_name': 'Pillars of Strength',
-            'opset_ncard': 127
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/sets/add',
+            data=json.dumps({'opset_id': 'OP03', 'opset_name': 'Pillars of Strength', 'opset_ncard': 127}),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -141,10 +154,16 @@ class TestSetsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-        resp = client.post('/onepiecetcg/sets/add', data=json.dumps({
-            'opset_id': 'OP01',
-            'opset_name': 'Duplicate Set',
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/sets/add',
+            data=json.dumps(
+                {
+                    'opset_id': 'OP01',
+                    'opset_name': 'Duplicate Set',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
@@ -154,10 +173,11 @@ class TestSetsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn', 121)
-        resp = client.post('/onepiecetcg/sets/update/OP01', data=json.dumps({
-            'opset_name': 'Romance Dawn (Updated)',
-            'opset_ncard': 150
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/sets/update/OP01',
+            data=json.dumps({'opset_name': 'Romance Dawn (Updated)', 'opset_ncard': 150}),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -170,6 +190,7 @@ class TestSetsRoutes:
 # ============================================================
 # 3.3 Cards Routes
 # ============================================================
+
 
 class TestCardsRoutes:
     """Tests for /onepiecetcg/cards/ (cards_bp)."""
@@ -193,8 +214,7 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            _seed_card(app, 'OP01', 'OP01-001', 'Monkey D. Luffy',
-                       'Leader', 'Red', 'Leader')
+            _seed_card(app, 'OP01', 'OP01-001', 'Monkey D. Luffy', 'Leader', 'Red', 'Leader')
         resp = client.get('/onepiecetcg/cards')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -260,8 +280,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(60):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         # Request with per_page=50
         resp = client.get('/onepiecetcg/cards?per_page=50&page=1')
         assert resp.status_code == 200
@@ -277,8 +296,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(60):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -294,8 +312,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(120):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards?per_page=100')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -309,8 +326,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(300):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards?per_page=250')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -323,8 +339,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(120):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         # First request with per_page=50 — should have multiple pages
         resp = client.get('/onepiecetcg/cards?per_page=50&page=2')
         assert resp.status_code == 200
@@ -346,8 +361,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(5):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards?per_page=30')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -403,10 +417,19 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            _seed_card(app, 'OP01', 'OP01-001', 'Rush Card', 'Character', 'Red', 'Common',
-                       effect='[Rush] Can attack on first turn')
-            _seed_card(app, 'OP01', 'OP01-002', 'No Rush Card', 'Character', 'Blue', 'Common',
-                       effect='[Blocker] Can block')
+            _seed_card(
+                app,
+                'OP01',
+                'OP01-001',
+                'Rush Card',
+                'Character',
+                'Red',
+                'Common',
+                effect='[Rush] Can attack on first turn',
+            )
+            _seed_card(
+                app, 'OP01', 'OP01-002', 'No Rush Card', 'Character', 'Blue', 'Common', effect='[Blocker] Can block'
+            )
         resp = client.get('/onepiecetcg/cards?search_effect=rush')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -418,10 +441,8 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            _seed_card(app, 'OP01', 'OP01-001', 'Supernova Card', 'Character', 'Red', 'Common',
-                       opcar_type='Supernova')
-            _seed_card(app, 'OP01', 'OP01-002', 'Normal Card', 'Character', 'Blue', 'Common',
-                       opcar_type='Navy')
+            _seed_card(app, 'OP01', 'OP01-001', 'Supernova Card', 'Character', 'Red', 'Common', opcar_type='Supernova')
+            _seed_card(app, 'OP01', 'OP01-002', 'Normal Card', 'Character', 'Blue', 'Common', opcar_type='Navy')
         resp = client.get('/onepiecetcg/cards?search_type=Supernova')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -511,8 +532,7 @@ class TestCardsRoutes:
             # Seed 60 Red + 60 Blue = 120 cards; with per_page=50, page 2 exists
             for i in range(120):
                 color = 'Red' if i % 2 == 0 else 'Blue'
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', color, 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', color, 'Common')
         resp = client.get('/onepiecetcg/cards?search_color=Red&per_page=50&page=2')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -554,8 +574,7 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            _seed_card(app, 'OP01', 'OP01-001', 'TestCard', 'Leader', 'Red', 'Leader',
-                       cost=5, power=6000, counter=1000)
+            _seed_card(app, 'OP01', 'OP01-001', 'TestCard', 'Leader', 'Red', 'Leader', cost=5, power=6000, counter=1000)
         resp = client.get('/onepiecetcg/cards?view=list')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -570,8 +589,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(60):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards?view=list&per_page=50&page=2')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -612,24 +630,28 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-        resp = client.post('/onepiecetcg/cards/add', data=json.dumps({
-            'opcar_opset_id': 'OP01',
-            'opcar_id': 'OP01-099',
-            'opcar_name': 'New Card',
-            'opcar_color': 'Red',
-            'opcar_category': 'Character',
-            'opcar_rarity': 'Common',
-            'opcar_cost': 3,
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/cards/add',
+            data=json.dumps(
+                {
+                    'opcar_opset_id': 'OP01',
+                    'opcar_id': 'OP01-099',
+                    'opcar_name': 'New Card',
+                    'opcar_color': 'Red',
+                    'opcar_category': 'Character',
+                    'opcar_rarity': 'Common',
+                    'opcar_cost': 3,
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         assert data['card']['opcar_name'] == 'New Card'
         # Verify in database
         with app.app_context():
-            c = OpCard.query.filter_by(
-                opcar_opset_id='OP01', opcar_id='OP01-099', opcar_version='p0'
-            ).first()
+            c = OpCard.query.filter_by(opcar_opset_id='OP01', opcar_id='OP01-099', opcar_version='p0').first()
             assert c is not None
             assert c.opcar_name == 'New Card'
 
@@ -639,11 +661,17 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Existing Card')
-        resp = client.post('/onepiecetcg/cards/add', data=json.dumps({
-            'opcar_opset_id': 'OP01',
-            'opcar_id': 'OP01-001',
-            'opcar_name': 'Duplicate Attempt',
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/cards/add',
+            data=json.dumps(
+                {
+                    'opcar_opset_id': 'OP01',
+                    'opcar_id': 'OP01-001',
+                    'opcar_name': 'Duplicate Attempt',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 409
         data = resp.get_json()
         assert data['success'] is False
@@ -652,11 +680,17 @@ class TestCardsRoutes:
         """POST with set_id that doesn't exist returns 400."""
         with app.app_context():
             _login(client)
-        resp = client.post('/onepiecetcg/cards/add', data=json.dumps({
-            'opcar_opset_id': 'NONEXISTENT',
-            'opcar_id': 'XX-001',
-            'opcar_name': 'Bad Set',
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/cards/add',
+            data=json.dumps(
+                {
+                    'opcar_opset_id': 'NONEXISTENT',
+                    'opcar_id': 'XX-001',
+                    'opcar_name': 'Bad Set',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
@@ -666,22 +700,35 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-        resp = client.post('/onepiecetcg/cards/add', data=json.dumps({
-            'opcar_opset_id': 'OP01',
-            'opcar_id': 'OP01-001',
-            # opcar_name missing
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/cards/add',
+            data=json.dumps(
+                {
+                    'opcar_opset_id': 'OP01',
+                    'opcar_id': 'OP01-001',
+                    # opcar_name missing
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
 
     def test_cards_add_unauthenticated_rejects(self, client):
         """POST without auth returns redirect/unauthorized."""
-        resp = client.post('/onepiecetcg/cards/add', data=json.dumps({
-            'opcar_opset_id': 'OP01',
-            'opcar_id': 'OP01-001',
-            'opcar_name': 'No Auth',
-        }), content_type='application/json', follow_redirects=False)
+        resp = client.post(
+            '/onepiecetcg/cards/add',
+            data=json.dumps(
+                {
+                    'opcar_opset_id': 'OP01',
+                    'opcar_id': 'OP01-001',
+                    'opcar_name': 'No Auth',
+                }
+            ),
+            content_type='application/json',
+            follow_redirects=False,
+        )
         assert resp.status_code in (302, 401)
 
     # --- Task 7: Manual Card Add Modal ---
@@ -724,7 +771,7 @@ class TestCardsRoutes:
         assert 'data-card-id' in html
         assert 'data-name' in html
         # Should NOT have the old onclick pattern with inline quotes
-        assert "onclick=\"openCardDetail('" not in html
+        assert 'onclick="openCardDetail(\'' not in html
 
     # --- Cards Page Fixes: BUG 6 (top pagination) ---
 
@@ -734,8 +781,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(60):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -805,18 +851,36 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            c1 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-001', opcar_version='p0',
-                        opcar_name='Blocker 1', opcar_category='Character',
-                        opcar_color='Red', opcar_rarity='Common',
-                        opcar_block_icon=1)
-            c2 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-002', opcar_version='p0',
-                        opcar_name='Blocker 2', opcar_category='Character',
-                        opcar_color='Blue', opcar_rarity='Common',
-                        opcar_block_icon=2)
-            c3 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-003', opcar_version='p0',
-                        opcar_name='Blocker 5', opcar_category='Character',
-                        opcar_color='Green', opcar_rarity='Rare',
-                        opcar_block_icon=5)
+            c1 = OpCard(
+                opcar_opset_id='OP01',
+                opcar_id='OP01-001',
+                opcar_version='p0',
+                opcar_name='Blocker 1',
+                opcar_category='Character',
+                opcar_color='Red',
+                opcar_rarity='Common',
+                opcar_block_icon=1,
+            )
+            c2 = OpCard(
+                opcar_opset_id='OP01',
+                opcar_id='OP01-002',
+                opcar_version='p0',
+                opcar_name='Blocker 2',
+                opcar_category='Character',
+                opcar_color='Blue',
+                opcar_rarity='Common',
+                opcar_block_icon=2,
+            )
+            c3 = OpCard(
+                opcar_opset_id='OP01',
+                opcar_id='OP01-003',
+                opcar_version='p0',
+                opcar_name='Blocker 5',
+                opcar_category='Character',
+                opcar_color='Green',
+                opcar_rarity='Rare',
+                opcar_block_icon=5,
+            )
             db.session.add_all([c1, c2, c3])
             db.session.commit()
         resp = client.get('/onepiecetcg/cards?min_block_icon=1&max_block_icon=3')
@@ -831,12 +895,25 @@ class TestCardsRoutes:
         with app.app_context():
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
-            c1 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-001', opcar_version='p0',
-                        opcar_name='Banned Card', opcar_category='Character',
-                        opcar_color='Red', opcar_rarity='Common', opcar_banned='Y')
-            c2 = OpCard(opcar_opset_id='OP01', opcar_id='OP01-002', opcar_version='p0',
-                        opcar_name='Legal Card', opcar_category='Character',
-                        opcar_color='Blue', opcar_rarity='Common')
+            c1 = OpCard(
+                opcar_opset_id='OP01',
+                opcar_id='OP01-001',
+                opcar_version='p0',
+                opcar_name='Banned Card',
+                opcar_category='Character',
+                opcar_color='Red',
+                opcar_rarity='Common',
+                opcar_banned='Y',
+            )
+            c2 = OpCard(
+                opcar_opset_id='OP01',
+                opcar_id='OP01-002',
+                opcar_version='p0',
+                opcar_name='Legal Card',
+                opcar_category='Character',
+                opcar_color='Blue',
+                opcar_rarity='Common',
+            )
             db.session.add_all([c1, c2])
             db.session.commit()
         resp = client.get('/onepiecetcg/cards?search_banned=1')
@@ -854,21 +931,19 @@ class TestCardsRoutes:
             _seed_card(app, 'OP01', 'OP01-002', 'No Price Card', 'Character', 'Blue', 'Common')
 
             # Create price data for OP01-001 only
-            from app.models.cardmarket import OpcmProductCardMap, OpcmPrice
             import datetime
+
+            from app.models.cardmarket import OpcmPrice, OpcmProductCardMap
+
             today = datetime.date.today().strftime('%Y%m%d')
             pmap = OpcmProductCardMap(
                 oppcm_id_product=99901,
                 oppcm_opset_id='OP01',
                 oppcm_opcar_id='OP01-001',
                 oppcm_opcar_version='p0',
-                oppcm_foil=None
+                oppcm_foil=None,
             )
-            price = OpcmPrice(
-                opprc_date=today,
-                opprc_id_product=99901,
-                opprc_low=1.23
-            )
+            price = OpcmPrice(opprc_date=today, opprc_id_product=99901, opprc_low=1.23)
             db.session.add_all([pmap, price])
             db.session.commit()
         resp = client.get('/onepiecetcg/cards?has_price=1')
@@ -915,7 +990,7 @@ class TestCardsRoutes:
         ace_pos = html.find('Ace')
         zoro_pos = html.find('Zoro')
         assert ace_pos > 0 and zoro_pos > 0
-        assert ace_pos < zoro_pos, "Ace should appear before Zoro when sorted ASC"
+        assert ace_pos < zoro_pos, 'Ace should appear before Zoro when sorted ASC'
 
     def test_cards_sort_by_cost_desc(self, app, client):
         """?sort=cost&order=desc orders by cost descending."""
@@ -931,7 +1006,7 @@ class TestCardsRoutes:
         exp_pos = html.find('Expensive')
         cheap_pos = html.find('Cheap')
         assert exp_pos > 0 and cheap_pos > 0
-        assert exp_pos < cheap_pos, "Expensive (cost 9) should appear before Cheap (cost 1) when sorted DESC"
+        assert exp_pos < cheap_pos, 'Expensive (cost 9) should appear before Cheap (cost 1) when sorted DESC'
 
     def test_cards_sort_default(self, app, client):
         """No sort param → default sort by set + card ID."""
@@ -948,7 +1023,7 @@ class TestCardsRoutes:
         op02_pos = html.find('OP02')
         # Default: OP01 comes before OP02
         assert op01_pos > 0 and op02_pos > 0
-        assert op01_pos < op02_pos, "Default sort: OP01 (set) should appear before OP02"
+        assert op01_pos < op02_pos, 'Default sort: OP01 (set) should appear before OP02'
 
     def test_cards_sort_dropdown_in_html(self, app, client):
         """Sort dropdown and asc/desc toggle are present in UI."""
@@ -988,8 +1063,7 @@ class TestCardsRoutes:
             _login(client)
             _seed_set(app, 'OP01', 'Romance Dawn')
             for i in range(60):
-                _seed_card(app, 'OP01', f'OP01-{i+1:03d}',
-                           f'Card {i+1}', 'Character', 'Red', 'Common')
+                _seed_card(app, 'OP01', f'OP01-{i + 1:03d}', f'Card {i + 1}', 'Character', 'Red', 'Common')
         resp = client.get('/onepiecetcg/cards?sort=cost&order=desc&per_page=50&page=1')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -1000,6 +1074,7 @@ class TestCardsRoutes:
 # ============================================================
 # 3.5 Collection Routes
 # ============================================================
+
 
 class TestCollectionRoutes:
     """Tests for /onepiecetcg/collection/ (collection_bp)."""
@@ -1024,22 +1099,20 @@ class TestCollectionRoutes:
             _login(client, username='coluser')
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
-        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_foil': 'N',
-            'opcol_quantity': 4
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {'opcol_opset_id': 'OP01', 'opcol_opcar_id': 'OP01-001', 'opcol_foil': 'N', 'opcol_quantity': 4}
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         # Verify in database
         with app.app_context():
             col = OpCollection.query.filter_by(
-                opcol_user='coluser',
-                opcol_opset_id='OP01',
-                opcol_opcar_id='OP01-001',
-                opcol_opcar_version='p0'
+                opcol_user='coluser', opcol_opset_id='OP01', opcol_opcar_id='OP01-001', opcol_opcar_version='p0'
             ).first()
             assert col is not None
             assert col.opcol_quantity == '4'
@@ -1050,22 +1123,25 @@ class TestCollectionRoutes:
             _login(client, username='variantuser')
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy Alt', version='p1')
-        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_opcar_version': 'p1',
-            'opcol_foil': 'N',
-            'opcol_quantity': 1
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {
+                    'opcol_opset_id': 'OP01',
+                    'opcol_opcar_id': 'OP01-001',
+                    'opcol_opcar_version': 'p1',
+                    'opcol_foil': 'N',
+                    'opcol_quantity': 1,
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         with app.app_context():
             col = OpCollection.query.filter_by(
-                opcol_user='variantuser',
-                opcol_opset_id='OP01',
-                opcol_opcar_id='OP01-001',
-                opcol_opcar_version='p1'
+                opcol_user='variantuser', opcol_opset_id='OP01', opcol_opcar_id='OP01-001', opcol_opcar_version='p1'
             ).first()
             assert col is not None
 
@@ -1073,12 +1149,13 @@ class TestCollectionRoutes:
         """Adding non-existent card returns error."""
         with app.app_context():
             _login(client)
-        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'FAKE',
-            'opcol_opcar_id': 'FAKE-999',
-            'opcol_foil': 'N',
-            'opcol_quantity': 1
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {'opcol_opset_id': 'FAKE', 'opcol_opcar_id': 'FAKE-999', 'opcol_foil': 'N', 'opcol_quantity': 1}
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 400
         data = resp.get_json()
         assert data['success'] is False
@@ -1090,23 +1167,35 @@ class TestCollectionRoutes:
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
         # First add
-        client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_foil': 'N',
-            'opcol_quantity': 2,
-            'opcol_condition': 'NM',
-            'opcol_language': 'EN'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {
+                    'opcol_opset_id': 'OP01',
+                    'opcol_opcar_id': 'OP01-001',
+                    'opcol_foil': 'N',
+                    'opcol_quantity': 2,
+                    'opcol_condition': 'NM',
+                    'opcol_language': 'EN',
+                }
+            ),
+            content_type='application/json',
+        )
         # Second add (same params)
-        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_foil': 'N',
-            'opcol_quantity': 3,
-            'opcol_condition': 'NM',
-            'opcol_language': 'EN'
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {
+                    'opcol_opset_id': 'OP01',
+                    'opcol_opcar_id': 'OP01-001',
+                    'opcol_foil': 'N',
+                    'opcol_quantity': 3,
+                    'opcol_condition': 'NM',
+                    'opcol_language': 'EN',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1114,9 +1203,7 @@ class TestCollectionRoutes:
         # Verify merged quantity
         with app.app_context():
             col = OpCollection.query.filter_by(
-                opcol_user='merger',
-                opcol_opset_id='OP01',
-                opcol_opcar_id='OP01-001'
+                opcol_user='merger', opcol_opset_id='OP01', opcol_opcar_id='OP01-001'
             ).first()
             assert col.opcol_quantity == '5'
 
@@ -1127,31 +1214,41 @@ class TestCollectionRoutes:
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
         # First add NM
-        client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_foil': 'N',
-            'opcol_quantity': 1,
-            'opcol_condition': 'NM',
-            'opcol_language': 'EN'
-        }), content_type='application/json')
+        client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {
+                    'opcol_opset_id': 'OP01',
+                    'opcol_opcar_id': 'OP01-001',
+                    'opcol_foil': 'N',
+                    'opcol_quantity': 1,
+                    'opcol_condition': 'NM',
+                    'opcol_language': 'EN',
+                }
+            ),
+            content_type='application/json',
+        )
         # Second add GD (new row)
-        resp = client.post('/onepiecetcg/collection/add', data=json.dumps({
-            'opcol_opset_id': 'OP01',
-            'opcol_opcar_id': 'OP01-001',
-            'opcol_foil': 'N',
-            'opcol_quantity': 1,
-            'opcol_condition': 'GD',
-            'opcol_language': 'EN'
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/add',
+            data=json.dumps(
+                {
+                    'opcol_opset_id': 'OP01',
+                    'opcol_opcar_id': 'OP01-001',
+                    'opcol_foil': 'N',
+                    'opcol_quantity': 1,
+                    'opcol_condition': 'GD',
+                    'opcol_language': 'EN',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data.get('merged') is False
         with app.app_context():
             rows = OpCollection.query.filter_by(
-                opcol_user='conduser',
-                opcol_opset_id='OP01',
-                opcol_opcar_id='OP01-001'
+                opcol_user='conduser', opcol_opset_id='OP01', opcol_opcar_id='OP01-001'
             ).all()
             assert len(rows) == 2
 
@@ -1162,19 +1259,28 @@ class TestCollectionRoutes:
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
             col = OpCollection(
-                opcol_opset_id='OP01', opcol_opcar_id='OP01-001',
-                opcol_foil='N', opcol_user='upduser', opcol_quantity='1'
+                opcol_opset_id='OP01',
+                opcol_opcar_id='OP01-001',
+                opcol_foil='N',
+                opcol_user='upduser',
+                opcol_quantity='1',
             )
             db.session.add(col)
             db.session.commit()
             col_id = col.opcol_id
-        resp = client.post('/onepiecetcg/collection/update', data=json.dumps({
-            'opcol_id': col_id,
-            'opcol_quantity': 10,
-            'opcol_selling': 'Y',
-            'opcol_sell_price': 15.50,
-            'opcol_condition': 'MT'
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/update',
+            data=json.dumps(
+                {
+                    'opcol_id': col_id,
+                    'opcol_quantity': 10,
+                    'opcol_selling': 'Y',
+                    'opcol_sell_price': 15.50,
+                    'opcol_condition': 'MT',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1192,15 +1298,18 @@ class TestCollectionRoutes:
             _seed_set(app, 'OP01', 'Romance Dawn')
             _seed_card(app, 'OP01', 'OP01-001', 'Luffy', 'Leader', 'Red', 'Leader')
             col = OpCollection(
-                opcol_opset_id='OP01', opcol_opcar_id='OP01-001',
-                opcol_foil='N', opcol_user='deluser', opcol_quantity='1'
+                opcol_opset_id='OP01',
+                opcol_opcar_id='OP01-001',
+                opcol_foil='N',
+                opcol_user='deluser',
+                opcol_quantity='1',
             )
             db.session.add(col)
             db.session.commit()
             col_id = col.opcol_id
-        resp = client.post('/onepiecetcg/collection/remove', data=json.dumps({
-            'opcol_id': col_id
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/collection/remove', data=json.dumps({'opcol_id': col_id}), content_type='application/json'
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1211,6 +1320,7 @@ class TestCollectionRoutes:
 # ============================================================
 # 3.7 Deck Routes
 # ============================================================
+
 
 class TestDeckRoutes:
     """Tests for /onepiecetcg/deck/ (deck_bp)."""
@@ -1233,27 +1343,25 @@ class TestDeckRoutes:
         """POST /onepiecetcg/deck/save creates a new deck."""
         with app.app_context():
             _login(client, username='deckuser')
-        resp = client.post('/onepiecetcg/deck/save', data=json.dumps({
-            'opdck_name': 'My First Deck',
-            'opdck_description': 'A test deck',
-            'opdck_mode': '1v1',
-            'opdck_format': 'Standard',
-            'opdck_cards': {
-                'main': [
-                    {'set': 'OP01', 'id': 'OP01-001', 'qty': 1}
-                ],
-                'sideboard': []
-            }
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/deck/save',
+            data=json.dumps(
+                {
+                    'opdck_name': 'My First Deck',
+                    'opdck_description': 'A test deck',
+                    'opdck_mode': '1v1',
+                    'opdck_format': 'Standard',
+                    'opdck_cards': {'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 1}], 'sideboard': []},
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
         # Verify in database
         with app.app_context():
-            deck = OpDeck.query.filter_by(
-                opdck_user='deckuser',
-                opdck_name='My First Deck'
-            ).first()
+            deck = OpDeck.query.filter_by(opdck_user='deckuser', opdck_name='My First Deck').first()
             assert deck is not None
             assert deck.opdck_seq == 1
             assert deck.opdck_ncards == 1
@@ -1263,17 +1371,20 @@ class TestDeckRoutes:
         with app.app_context():
             _login(client, username='veruser')
             # Create first version
-            deck = OpDeck(
-                opdck_user='veruser', opdck_name='VersionedDeck',
-                opdck_seq=1, opdck_ncards=30
-            )
+            deck = OpDeck(opdck_user='veruser', opdck_name='VersionedDeck', opdck_seq=1, opdck_ncards=30)
             db.session.add(deck)
             db.session.commit()
-        resp = client.post('/onepiecetcg/deck/save', data=json.dumps({
-            'opdck_name': 'VersionedDeck',
-            'opdck_mode': '1v1',
-            'opdck_format': 'Standard',
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/deck/save',
+            data=json.dumps(
+                {
+                    'opdck_name': 'VersionedDeck',
+                    'opdck_mode': '1v1',
+                    'opdck_format': 'Standard',
+                }
+            ),
+            content_type='application/json',
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1284,9 +1395,11 @@ class TestDeckRoutes:
         with app.app_context():
             _login(client, username='viewuser')
             deck = OpDeck(
-                opdck_user='viewuser', opdck_name='ViewDeck',
-                opdck_seq=1, opdck_ncards=30,
-                opdck_cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 4}]}
+                opdck_user='viewuser',
+                opdck_name='ViewDeck',
+                opdck_seq=1,
+                opdck_ncards=30,
+                opdck_cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 4}]},
             )
             db.session.add(deck)
             db.session.commit()
@@ -1306,16 +1419,13 @@ class TestDeckRoutes:
         """POST /onepiecetcg/deck/delete deletes a deck."""
         with app.app_context():
             _login(client, username='deldeck')
-            deck = OpDeck(
-                opdck_user='deldeck', opdck_name='DeleteMe',
-                opdck_seq=1, opdck_ncards=30
-            )
+            deck = OpDeck(opdck_user='deldeck', opdck_name='DeleteMe', opdck_seq=1, opdck_ncards=30)
             db.session.add(deck)
             db.session.commit()
             deck_id = deck.id
-        resp = client.post('/onepiecetcg/deck/delete', data=json.dumps({
-            'id': deck_id
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/deck/delete', data=json.dumps({'id': deck_id}), content_type='application/json'
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert data['success'] is True
@@ -1326,16 +1436,13 @@ class TestDeckRoutes:
         """Deleting another user's deck returns error."""
         with app.app_context():
             _login(client, username='gooduser')
-            deck = OpDeck(
-                opdck_user='otheruser', opdck_name='NotYours',
-                opdck_seq=1, opdck_ncards=30
-            )
+            deck = OpDeck(opdck_user='otheruser', opdck_name='NotYours', opdck_seq=1, opdck_ncards=30)
             db.session.add(deck)
             db.session.commit()
             deck_id = deck.id
-        resp = client.post('/onepiecetcg/deck/delete', data=json.dumps({
-            'id': deck_id
-        }), content_type='application/json')
+        resp = client.post(
+            '/onepiecetcg/deck/delete', data=json.dumps({'id': deck_id}), content_type='application/json'
+        )
         # Should either return 404 or 403, or success=False
         data = resp.get_json()
         assert resp.status_code in (404, 403, 200)

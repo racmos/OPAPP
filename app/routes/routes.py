@@ -1,7 +1,8 @@
 """
 Main routes module — dashboard and root redirect.
 """
-from flask import Blueprint, render_template, redirect, url_for
+
+from flask import Blueprint, render_template
 from flask_login import login_required
 
 main_bp = Blueprint('main', __name__, url_prefix='/onepiecetcg')

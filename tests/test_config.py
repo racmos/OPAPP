@@ -1,14 +1,17 @@
 """
 Tests for config.py — Config class and engine_options helper.
 """
-import os
+
 import importlib
+import os
+
 import pytest
 
 
 def _reload_config():
     """Reload config module to re-evaluate class attributes with current env."""
     import config
+
     return importlib.reload(config)
 
 
