@@ -147,11 +147,67 @@
 }
 .pagination a:hover { background-color: var(--accent); }
 .pagination .current { background-color: var(--accent); font-weight: bold; }
+
+/* List View Table */
+.card-list-table {
+    margin-top: 1rem;
+}
+.card-list-table th, .card-list-table td {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+.card-list-table td {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Thumbnail hover enlarge (pure CSS) */
+.thumb-container {
+    position: relative;
+    display: inline-block;
+}
+.list-thumb {
+    width: 50px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+.thumb-container:hover::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9998;
+}
+.thumb-container:hover::after {
+    content: '';
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    height: 560px;
+    background-image: inherit;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 9999;
+    border-radius: 8px;
+}
+.thumb-container:hover .list-thumb {
+    border: 2px solid var(--accent);
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <h1 style="color: var(--gold); margin-bottom: 1.5rem;">Cards</h1>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+    <button class="btn btn-primary" onclick="openAddCardModal()" style="font-size:0.9rem;">+ Add Card</button>
+</div>
 
 <!-- Search bar -->
 <div class="filter-section">
@@ -206,14 +262,35 @@
     </form>
 </div>
 
-<!-- Cards count -->
-<p style="color: var(--text-muted); margin-bottom: 0.5rem;">
+<!-- Cards count + Per-page selector + View toggle row -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
+<p style="color: var(--text-muted); margin: 0;">
     Showing {{ pagination.items|length }} of {{ pagination.total }} cards
     {% if per_page < pagination.total %}(Page {{ pagination.page }} of {{ pagination.pages }}){% endif %}
 </p>
 
+<div style="display:flex;align-items:center;gap:0.5rem;">
+    <label for="per_page" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap;">Per page:</label>
+    <select id="per_page" name="per_page" onchange="changePerPage(this.value)" style="padding:0.3rem 0.5rem;font-size:0.85rem;width:auto;background-color:var(--bg-panel);color:var(--text);border:1px solid var(--bg-hover);border-radius:4px;">
+        {% for n in [50, 100, 250, 500, 1000] %}
+        <option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+    </select>
+
+    <span style="color:var(--text-muted);font-size:0.85rem;">View:</span>
+    <button id="viewGridBtn" class="btn btn-sm" onclick="toggleView('grid')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'list' %}opacity:0.5;background:var(--bg-hover);{% endif %}">Grid</button>
+    <button id="viewListBtn" class="btn btn-sm" onclick="toggleView('list')" style="padding:0.3rem 0.5rem;font-size:0.8rem;{% if view == 'grid' %}opacity:0.5;background:var(--bg-hover);{% endif %}">List</button>
+
+    <span id="gridColSlider" style="{% if view == 'list' %}display:none;{% endif %}display:flex;align-items:center;gap:0.35rem;margin-left:0.5rem;">
+        <label for="gridCols" style="color:var(--text-muted);font-size:0.8rem;white-space:nowrap;">Columns:</label>
+        <input type="range" id="gridCols" min="1" max="10" value="0" oninput="updateGridCols(this.value)" style="width:80px;accent-color:var(--accent);" title="Grid columns">
+        <span id="gridColsLabel" style="color:var(--gold);font-size:0.8rem;min-width:18px;">auto</span>
+    </span>
+</div>
+</div>
+
 <!-- Card Grid -->
-<div class="card-grid">
+<div class="card-grid" id="cardGridView" style="{% if view == 'list' %}display:none;{% endif %}">
     {% for card in cards %}
     <div class="card-item" onclick="openCardDetail('{{ card.opcar_opset_id }}', '{{ card.opcar_id }}', '{{ card.opcar_version }}', '{{ card.opcar_name|e }}', '{{ card.opcar_category or '' }}', '{{ card.opcar_cost or '' }}', '{{ card.opcar_power or '' }}', '{{ card.opcar_counter or '' }}', '{{ card.opcar_attribute or '' }}', '{{ card.opcar_type or '' }}', '{{ card.opcar_effect or '' }}', '{{ card.opcar_banned or '' }}', '{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}', '{{ card.image_src or '' }}')">
         {% if card.image_src %}
@@ -240,21 +317,58 @@
     {% endfor %}
 </div>
 
+<!-- Card List View (table) -->
+<div id="cardListView" style="{% if view == 'grid' %}display:none;{% endif %}">
+    <table class="card-list-table">
+        <thead>
+            <tr>
+                <th>Image</th><th>Card ID</th><th>Name</th><th>Set</th>
+                <th>Category</th><th>Color</th><th>Rarity</th>
+                <th>Cost</th><th>Power</th><th>Counter</th><th>Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for card in cards %}
+            <tr onclick="openCardDetail('{{ card.opcar_opset_id }}', '{{ card.opcar_id }}', '{{ card.opcar_version }}', '{{ card.opcar_name|e }}', '{{ card.opcar_category or '' }}', '{{ card.opcar_cost or '' }}', '{{ card.opcar_power or '' }}', '{{ card.opcar_counter or '' }}', '{{ card.opcar_attribute or '' }}', '{{ card.opcar_type or '' }}', '{{ card.opcar_effect or '' }}', '{{ card.opcar_banned or '' }}', '{{ card.opcar_block_icon if card.opcar_block_icon is not none else '' }}', '{{ card.image_src or '' }}')" style="cursor:pointer;">
+                <td>
+                    {% if card.image_src %}
+                    <div class="thumb-container" style="background-image:url('{{ card.image_src }}');">
+                        <img src="{{ card.image_src }}" alt="{{ card.opcar_name }}" class="list-thumb" onerror="this.style.display='none'">
+                    </div>
+                    {% endif %}
+                </td>
+                <td>{{ card.opcar_id }}{% if card.opcar_version and card.opcar_version != 'p0' %}_{{ card.opcar_version }}{% endif %}</td>
+                <td>{{ card.opcar_name }}</td>
+                <td>{{ card.opcar_opset_id }}</td>
+                <td>{{ card.opcar_category or '-' }}</td>
+                <td>{{ card.opcar_color or '-' }}</td>
+                <td>{{ card.opcar_rarity or '-' }}</td>
+                <td>{{ card.opcar_cost if card.opcar_cost is not none else '-' }}</td>
+                <td>{{ card.opcar_power if card.opcar_power is not none else '-' }}</td>
+                <td>{{ card.opcar_counter if card.opcar_counter is not none else '-' }}</td>
+                <td>{{ price_map.get((card.opcar_opset_id, card.opcar_id, card.opcar_version), '-') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <!-- Pagination -->
 {% if pagination.pages > 1 %}
 <div class="pagination">
+    {% set qs = request.query_string.decode('utf-8') if request.query_string else '' %}
     {% if pagination.has_prev %}
-    <a href="?{{ request.args|replace('page=' ~ pagination.page, 'page=' ~ pagination.prev_num) if 'page=' in (request.query_string|string) else request.query_string|string + '&page=' ~ pagination.prev_num|string }}">&laquo; Prev</a>
+    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ pagination.prev_num) if 'page=' in qs else (qs ~ '&page=' ~ pagination.prev_num|string if qs else 'page=' ~ pagination.prev_num|string) }}">&laquo; Prev</a>
     {% endif %}
     {% for p in range(max(1, pagination.page - 2), min(pagination.pages, pagination.page + 2) + 1) %}
     {% if p == pagination.page %}
     <span class="current">{{ p }}</span>
     {% else %}
-    <a href="?page={{ p }}&search_name={{ request.args.get('search_name', '') }}&search_set={{ request.args.get('search_set', '') }}&search_color={{ request.args.get('search_color', '') }}&search_category={{ request.args.get('search_category', '') }}&search_rarity={{ request.args.get('search_rarity', '') }}">{{ p }}</a>
+    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ p) if 'page=' in qs else (qs ~ '&page=' ~ p|string if qs else 'page=' ~ p|string) }}">{{ p }}</a>
     {% endif %}
     {% endfor %}
     {% if pagination.has_next %}
-    <a href="?page={{ pagination.next_num }}&search_name={{ request.args.get('search_name', '') }}&search_set={{ request.args.get('search_set', '') }}&search_color={{ request.args.get('search_color', '') }}&search_category={{ request.args.get('search_category', '') }}&search_rarity={{ request.args.get('search_rarity', '') }}">Next &raquo;</a>
+    <a href="?{{ qs|replace('page=' ~ pagination.page, 'page=' ~ pagination.next_num) if 'page=' in qs else (qs ~ '&page=' ~ pagination.next_num|string if qs else 'page=' ~ pagination.next_num|string) }}">Next &raquo;</a>
     {% endif %}
 </div>
 {% endif %}
@@ -293,10 +407,145 @@
         </dl>
     </div>
 </div>
+
+<!-- Add Card Modal -->
+<div class="modal" id="cardAddModal">
+    <div class="modal-content" style="max-width:650px;max-height:90vh;overflow-y:auto;">
+        <div class="modal-header">
+            <h2>Add New Card</h2>
+            <span class="close" onclick="closeAddCardModal()">&times;</span>
+        </div>
+        <form id="addCardForm" onsubmit="submitAddCard(event)">
+            <div class="form-group">
+                <label>Set ID *</label>
+                <input type="text" name="opcar_opset_id" id="ac_set_id" required placeholder="e.g. OP01">
+            </div>
+            <div class="form-group">
+                <label>Card ID *</label>
+                <input type="text" name="opcar_id" id="ac_card_id" required placeholder="e.g. OP01-001">
+            </div>
+            <div class="form-group">
+                <label>Name *</label>
+                <input type="text" name="opcar_name" id="ac_name" required placeholder="Card name">
+            </div>
+            <div class="form-group">
+                <label>Version</label>
+                <input type="text" name="opcar_version" id="ac_version" value="p0" placeholder="p0">
+            </div>
+            <div class="form-group">
+                <label>Category</label>
+                <input type="text" name="opcar_category" id="ac_category" placeholder="e.g. Leader">
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <input type="text" name="opcar_color" id="ac_color" placeholder="e.g. Red">
+            </div>
+            <div class="form-group">
+                <label>Rarity</label>
+                <input type="text" name="opcar_rarity" id="ac_rarity" placeholder="e.g. Common">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label>Cost</label>
+                    <input type="number" name="opcar_cost" id="ac_cost" min="0" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>Life</label>
+                    <input type="number" name="opcar_life" id="ac_life" placeholder="0">
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label>Power</label>
+                    <input type="number" name="opcar_power" id="ac_power" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>Counter</label>
+                    <input type="number" name="opcar_counter" id="ac_counter" min="0" placeholder="0">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Attribute</label>
+                <input type="text" name="opcar_attribute" id="ac_attribute" placeholder="e.g. Slash">
+            </div>
+            <div class="form-group">
+                <label>Type</label>
+                <input type="text" name="opcar_type" id="ac_type" placeholder="e.g. Supernova">
+            </div>
+            <div class="form-group">
+                <label>Effect</label>
+                <textarea name="opcar_effect" id="ac_effect" rows="2" placeholder="Card effect text"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Image filename</label>
+                <input type="text" name="image_src" id="ac_image" placeholder="e.g. OP01-001.png">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label>Banned</label>
+                    <select name="opcar_banned" id="ac_banned">
+                        <option value="">No</option>
+                        <option value="Y">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Block Icon</label>
+                    <input type="number" name="opcar_block_icon" id="ac_block" min="0" placeholder="Block #">
+                </div>
+            </div>
+            <div id="acError" class="alert alert-error" style="display:none;margin-bottom:1rem;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
+function changePerPage(value) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('per_page', value);
+    params.set('page', '1');   // reset to page 1
+    window.history.replaceState(null, '', '?' + params.toString());
+    window.location.href = '?' + params.toString();
+}
+
+function toggleView(view) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view', view);
+    params.set('page', '1');
+    window.history.replaceState(null, '', '?' + params.toString());
+    window.location.href = '?' + params.toString();
+}
+
+// Grid column slider
+function updateGridCols(value) {
+    document.getElementById('gridColsLabel').textContent = value;
+    var grid = document.getElementById('cardGridView');
+    if (value && parseInt(value) > 0) {
+        grid.style.gridTemplateColumns = 'repeat(' + value + ', 1fr)';
+    } else {
+        grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(200px, 1fr))';
+    }
+    try { localStorage.setItem('opapp-grid-cols', value); } catch(e) {}
+}
+
+// On page load, restore grid cols from localStorage
+(function() {
+    var saved = localStorage.getItem('opapp-grid-cols');
+    if (saved && parseInt(saved) >= 1 && parseInt(saved) <= 10) {
+        document.getElementById('gridCols').value = saved;
+        updateGridCols(saved);
+    } else {
+        document.getElementById('gridCols').value = '0';
+        document.getElementById('gridColsLabel').textContent = 'auto';
+    }
+})();
+
 function openCardDetail(setId, cardId, version, name, category, cost, power, counter, attribute, type, effect, banned, blockIcon, imageSrc) {
     document.getElementById('detailName').textContent = name;
     document.getElementById('detailSetId').textContent = setId + ' / ' + cardId;
@@ -323,5 +572,61 @@ function openCardDetail(setId, cardId, version, name, category, cost, power, cou
 document.getElementById('cardDetailModal').addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('active');
 });
+
+// Add Card Modal
+function openAddCardModal() {
+    document.getElementById('cardAddModal').classList.add('active');
+    document.getElementById('addCardForm').reset();
+    document.getElementById('acError').style.display = 'none';
+}
+function closeAddCardModal() {
+    document.getElementById('cardAddModal').classList.remove('active');
+}
+document.getElementById('cardAddModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddCardModal();
+});
+
+async function submitAddCard(e) {
+    e.preventDefault();
+    var err = document.getElementById('acError');
+    err.style.display = 'none';
+
+    var form = document.getElementById('addCardForm');
+    var data = {};
+    var fields = ['opcar_opset_id','opcar_id','opcar_name','opcar_version','opcar_category',
+                  'opcar_color','opcar_rarity','opcar_cost','opcar_life','opcar_power',
+                  'opcar_counter','opcar_attribute','opcar_type','opcar_effect',
+                  'image_src','opcar_banned','opcar_block_icon'];
+    for (var i = 0; i < fields.length; i++) {
+        var el = document.getElementById('ac_' + fields[i].replace('opcar_','').replace('image_src','image'));
+        if (el) {
+            var v = el.value.trim();
+            if (v !== '') {
+                if (['opcar_cost','opcar_life','opcar_power','opcar_counter','opcar_block_icon'].indexOf(fields[i]) >= 0) {
+                    v = parseInt(v);
+                }
+                data[fields[i]] = v;
+            }
+        }
+    }
+
+    try {
+        var resp = await fetch('/onepiecetcg/cards/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        var result = await resp.json();
+        if (result.success) {
+            window.location.reload();
+        } else {
+            err.textContent = result.error || 'Submission failed';
+            err.style.display = 'block';
+        }
+    } catch(ex) {
+        err.textContent = 'Network error: ' + ex.message;
+        err.style.display = 'block';
+    }
+}
 </script>
 {% endblock %}
