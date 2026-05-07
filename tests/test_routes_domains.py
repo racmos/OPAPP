@@ -1451,3 +1451,386 @@ class TestDeckRoutes:
         # Verify deck still exists
         with app.app_context():
             assert OpDeck.query.get(deck_id) is not None
+
+
+class TestDeckCardManagement:
+    """Tests for POST /deck/<id>/cards/add and /remove."""
+
+    def _seed_deck(self, app, client, username, cards=None, ncards=0):
+        """Seed a deck for the logged-in user and return deck id."""
+        with app.app_context():
+            user = OpUser(username=username, email=f'{username}@test.com')
+            user.set_password('testpass')
+            db.session.add(user)
+            db.session.commit()
+
+            deck = OpDeck(
+                opdck_user=username,
+                opdck_name='TestDeck',
+                opdck_seq=1,
+                opdck_ncards=ncards,
+                opdck_cards=cards or {'main': [], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+            return deck.id
+
+    def _login_user(self, client, email, password):
+        """Login helper."""
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': email, 'password': password}),
+            content_type='application/json',
+        )
+
+    def test_add_card_to_main(self, app, client):
+        """T10: Add card to main deck."""
+        deck_id = self._seed_deck(app, client, 'addmain')
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy')
+        self._login_user(client, 'addmain@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 2}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_ncards == 2
+            assert any(c['set'] == 'OP01' and c['id'] == 'OP01-001' and c['qty'] == 2 for c in deck.opdck_cards['main'])
+
+    def test_add_card_to_sideboard(self, app, client):
+        """T11: Add card to sideboard."""
+        deck_id = self._seed_deck(app, client, 'addside')
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy')
+        self._login_user(client, 'addside@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'sideboard', 'quantity': 3}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert any(
+                c['set'] == 'OP01' and c['id'] == 'OP01-001' and c['qty'] == 3 for c in deck.opdck_cards['sideboard']
+            )
+
+    def test_add_card_increments_existing(self, app, client):
+        """T12: Add card increments existing qty."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'addinc',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 1}], 'sideboard': []},
+            ncards=1,
+        )
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy')
+        self._login_user(client, 'addinc@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_cards['main'][0]['qty'] == 2
+            assert deck.opdck_ncards == 2
+
+    def test_add_card_exceeds_4_copy_limit(self, app, client):
+        """T13: Exceed max 4 copies returns 400."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'add4',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 4}], 'sideboard': []},
+            ncards=4,
+        )
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy')
+        self._login_user(client, 'add4@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_ncards == 4
+
+    def test_add_card_exceeds_60_main_limit(self, app, client):
+        """T14: Exceed main deck 60-card limit returns 400."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'add60',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 59}], 'sideboard': []},
+            ncards=59,
+        )
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-002', 'Zoro')
+        self._login_user(client, 'add60@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-002', 'section': 'main', 'quantity': 2}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_ncards == 59
+
+    def test_add_card_exceeds_15_sideboard_limit(self, app, client):
+        """T15: Exceed sideboard 15-card limit returns 400."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'add15',
+            cards={'main': [], 'sideboard': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 15}]},
+            ncards=15,
+        )
+        with app.app_context():
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-002', 'Zoro')
+        self._login_user(client, 'add15@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-002', 'section': 'sideboard', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_ncards == 15
+
+    def test_add_card_non_owner_returns_404(self, app, client):
+        """T16: Non-owner add returns 404."""
+        with app.app_context():
+            alice = OpUser(username='alice', email='alice@test.com')
+            alice.set_password('testpass')
+            db.session.add(alice)
+            db.session.commit()
+            deck = OpDeck(
+                opdck_user='alice',
+                opdck_name='AliceDeck',
+                opdck_seq=1,
+                opdck_ncards=0,
+                opdck_cards={'main': [], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+            deck_id = deck.id
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            _seed_card(app, 'OP01', 'OP01-001', 'Luffy')
+
+            bob = OpUser(username='bob', email='bob@test.com')
+            bob.set_password('testpass')
+            db.session.add(bob)
+            db.session.commit()
+
+        # Bob logs in
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'bob@test.com', 'password': 'testpass'}),
+            content_type='application/json',
+        )
+
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 404
+
+    def test_add_card_nonexistent_card_returns_400(self, app, client):
+        """Adding a non-existent card returns 400."""
+        deck_id = self._seed_deck(app, client, 'addfake')
+        self._login_user(client, 'addfake@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/add',
+            data=json.dumps({'set_id': 'FAKE', 'card_id': 'FAKE-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+
+    def test_remove_card_reduces_qty(self, app, client):
+        """T17: Remove card reduces qty."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'remqty',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 3}], 'sideboard': []},
+            ncards=3,
+        )
+        self._login_user(client, 'remqty@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/remove',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['success'] is True
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_cards['main'][0]['qty'] == 2
+            assert deck.opdck_ncards == 2
+
+    def test_remove_card_deletes_entry(self, app, client):
+        """T18: Remove all copies deletes entry."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'remdel',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 2}], 'sideboard': []},
+            ncards=2,
+        )
+        self._login_user(client, 'remdel@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/remove',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 2}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+        with app.app_context():
+            deck = OpDeck.query.get(deck_id)
+            assert deck.opdck_cards['main'] == []
+            assert deck.opdck_ncards == 0
+
+    def test_remove_card_not_in_deck(self, app, client):
+        """T19: Remove card not in deck returns 400."""
+        deck_id = self._seed_deck(
+            app,
+            client,
+            'remnone',
+            cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 2}], 'sideboard': []},
+            ncards=2,
+        )
+        self._login_user(client, 'remnone@test.com', 'testpass')
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/remove',
+            data=json.dumps({'set_id': 'OP02', 'card_id': 'OP02-999', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        data = resp.get_json()
+        assert data['success'] is False
+
+    def test_remove_card_non_owner(self, app, client):
+        """T20: Non-owner remove returns 404."""
+        with app.app_context():
+            alice = OpUser(username='alice', email='alice@test.com')
+            alice.set_password('testpass')
+            db.session.add(alice)
+            db.session.commit()
+            deck = OpDeck(
+                opdck_user='alice',
+                opdck_name='AliceDeck',
+                opdck_seq=1,
+                opdck_ncards=2,
+                opdck_cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 2}], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+            deck_id = deck.id
+
+            bob = OpUser(username='bob', email='bob@test.com')
+            bob.set_password('testpass')
+            db.session.add(bob)
+            db.session.commit()
+
+        client.post(
+            '/onepiecetcg/login',
+            data=json.dumps({'email': 'bob@test.com', 'password': 'testpass'}),
+            content_type='application/json',
+        )
+
+        resp = client.post(
+            f'/onepiecetcg/deck/{deck_id}/cards/remove',
+            data=json.dumps({'set_id': 'OP01', 'card_id': 'OP01-001', 'section': 'main', 'quantity': 1}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 404
+
+
+class TestDeckViewUI:
+    """Tests for deck_view.html UI elements."""
+
+    def test_deck_view_has_search_modal(self, app, client):
+        """T28: Deck view has card search modal."""
+        with app.app_context():
+            _login(client, username='deckui')
+            deck = OpDeck(
+                opdck_user='deckui',
+                opdck_name='UIDeck',
+                opdck_seq=1,
+                opdck_ncards=0,
+                opdck_cards={'main': [], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+        resp = client.get('/onepiecetcg/deck/view/UIDeck')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'cardSearchModal' in html or 'search-modal' in html.lower()
+        assert '/cards/search' in html
+
+    def test_deck_view_has_add_button_on_search_results(self, app, client):
+        """T29: Search results have Add buttons."""
+        with app.app_context():
+            _login(client, username='deckui2')
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            deck = OpDeck(
+                opdck_user='deckui2',
+                opdck_name='UIDeck2',
+                opdck_seq=1,
+                opdck_ncards=0,
+                opdck_cards={'main': [], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+        resp = client.get('/onepiecetcg/deck/view/UIDeck2')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'cards/add' in html
+
+    def test_deck_view_has_remove_button_on_existing_cards(self, app, client):
+        """T30: Existing deck cards have Remove buttons."""
+        with app.app_context():
+            _login(client, username='deckui3')
+            _seed_set(app, 'OP01', 'Romance Dawn')
+            deck = OpDeck(
+                opdck_user='deckui3',
+                opdck_name='UIDeck3',
+                opdck_seq=1,
+                opdck_ncards=2,
+                opdck_cards={'main': [{'set': 'OP01', 'id': 'OP01-001', 'qty': 2}], 'sideboard': []},
+            )
+            db.session.add(deck)
+            db.session.commit()
+        resp = client.get('/onepiecetcg/deck/view/UIDeck3')
+        assert resp.status_code == 200
+        html = resp.data.decode('utf-8')
+        assert 'cards/remove' in html

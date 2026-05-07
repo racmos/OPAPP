@@ -6,7 +6,7 @@ from functools import wraps
 from typing import Optional
 
 from flask import jsonify, request
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 # ============== Validation Decorator ==============
 
@@ -212,3 +212,47 @@ class AutoMatchApply(BaseModel):
     """Schema for the selective auto-match apply request."""
 
     pairings: list[AutoMatchPairing] = Field(..., min_length=1, description='List of pairings to apply')
+
+
+class ProfileUpdateSchema(BaseModel):
+    """Schema for profile update requests."""
+
+    current_password: str = Field(..., min_length=6, description='Current password for verification')
+    email: Optional[str] = Field(None, description='New email address')
+    new_password: Optional[str] = Field(None, min_length=6, description='New password')
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
+        """Validate email format if provided."""
+        if v is None:
+            return v
+        v = v.strip()
+        if '@' not in v:
+            raise ValueError('Invalid email format')
+        return v
+
+    @model_validator(mode='after')
+    def check_at_least_one_change(self):
+        """Ensure at least one of email or new_password is provided."""
+        if self.email is None and self.new_password is None:
+            raise ValueError('At least one of email or new_password must be provided')
+        return self
+
+
+class DeckCardAction(BaseModel):
+    """Schema for adding or removing a card from a deck."""
+
+    set_id: str = Field(..., min_length=1, description='Set ID')
+    card_id: str = Field(..., min_length=1, description='Card ID')
+    section: str = Field(..., description='Deck section: main or sideboard')
+    quantity: int = Field(1, ge=1, description='Quantity to add/remove')
+
+    @field_validator('section')
+    @classmethod
+    def validate_section(cls, v: str) -> str:
+        """Validate section is main or sideboard."""
+        v = v.strip().lower()
+        if v not in ('main', 'sideboard'):
+            raise ValueError("section must be 'main' or 'sideboard'")
+        return v

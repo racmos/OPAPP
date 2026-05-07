@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 
 from app import db
@@ -111,3 +112,75 @@ class OpDeck(db.Model):
     def max_set(self):
         """Alias for opdck_max_set (compatibility)."""
         return self.opdck_max_set
+
+    def add_card(self, section: str, set_id: str, card_id: str, quantity: int = 1) -> list[dict]:
+        """Add cards to a deck section.
+
+        Raises:
+            ValueError: If limits are exceeded (4-copy, 60-main, 15-sideboard).
+        """
+        cards = copy.deepcopy(self.opdck_cards) if self.opdck_cards else {'main': [], 'sideboard': []}
+        section_list = list(cards.get(section, []))
+
+        # Find existing entry
+        existing = None
+        for card in section_list:
+            if card.get('set') == set_id and card.get('id') == card_id:
+                existing = card
+                break
+
+        current_qty = existing.get('qty', 0) if existing else 0
+        new_qty = current_qty + quantity
+
+        # Enforce 4-copy limit
+        if new_qty > 4:
+            raise ValueError(f'Cannot exceed 4 copies of the same card (currently {current_qty})')
+
+        # Enforce section size limits
+        section_total = sum(c.get('qty', 0) for c in section_list)
+        new_section_total = section_total + quantity
+        if section == 'main' and new_section_total > 60:
+            raise ValueError(f'Main deck cannot exceed 60 cards (currently {section_total})')
+        if section == 'sideboard' and new_section_total > 15:
+            raise ValueError(f'Sideboard cannot exceed 15 cards (currently {section_total})')
+
+        if existing:
+            existing['qty'] = new_qty
+        else:
+            section_list.append({'set': set_id, 'id': card_id, 'qty': quantity})
+
+        cards[section] = section_list
+        self.opdck_cards = cards
+        self.opdck_ncards = (self.opdck_ncards or 0) + quantity
+        return section_list
+
+    def remove_card(self, section: str, set_id: str, card_id: str, quantity: int = 1) -> list[dict]:
+        """Remove cards from a deck section.
+
+        Raises:
+            ValueError: If card is not found in the section.
+        """
+        cards = copy.deepcopy(self.opdck_cards) if self.opdck_cards else {'main': [], 'sideboard': []}
+        section_list = list(cards.get(section, []))
+
+        existing = None
+        idx = -1
+        for i, card in enumerate(section_list):
+            if card.get('set') == set_id and card.get('id') == card_id:
+                existing = card
+                idx = i
+                break
+
+        if existing is None:
+            raise ValueError(f'Card {set_id}-{card_id} not found in {section}')
+
+        new_qty = existing.get('qty', 0) - quantity
+        if new_qty <= 0:
+            section_list.pop(idx)
+        else:
+            existing['qty'] = new_qty
+
+        cards[section] = section_list
+        self.opdck_cards = cards
+        self.opdck_ncards = max(0, (self.opdck_ncards or 0) - quantity)
+        return section_list

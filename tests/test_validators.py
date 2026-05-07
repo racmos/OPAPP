@@ -93,6 +93,121 @@ class TestRegisterSchema:
         assert schema.email == 'new@test.com'
 
 
+class TestProfileUpdateSchema:
+    """Unit tests for ProfileUpdateSchema."""
+
+    def test_valid_email_only(self):
+        """Accepts current_password + email."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        schema = ProfileUpdateSchema(current_password='pass1234', email='test@example.com')
+        assert schema.current_password == 'pass1234'
+        assert schema.email == 'test@example.com'
+        assert schema.new_password is None
+
+    def test_valid_password_only(self):
+        """Accepts current_password + new_password."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        schema = ProfileUpdateSchema(current_password='pass1234', new_password='newpass1234')
+        assert schema.new_password == 'newpass1234'
+        assert schema.email is None
+
+    def test_valid_both_fields(self):
+        """Accepts current_password + email + new_password."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        schema = ProfileUpdateSchema(current_password='pass1234', email='test@example.com', new_password='newpass1234')
+        assert schema.email == 'test@example.com'
+        assert schema.new_password == 'newpass1234'
+
+    def test_rejects_missing_current_password(self):
+        """Rejects when current_password is missing."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        with pytest.raises(ValidationError):
+            ProfileUpdateSchema(email='test@example.com')
+
+    def test_rejects_no_changes(self):
+        """Rejects when only current_password is provided."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        with pytest.raises(ValidationError) as exc_info:
+            ProfileUpdateSchema(current_password='pass1234')
+        assert 'at least one' in str(exc_info.value).lower() or 'email' in str(exc_info.value).lower()
+
+    def test_rejects_invalid_email(self):
+        """Rejects invalid email format."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        with pytest.raises(ValidationError):
+            ProfileUpdateSchema(current_password='pass1234', email='not-an-email')
+
+    def test_rejects_short_current_password(self):
+        """Rejects current_password shorter than 6 chars."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        with pytest.raises(ValidationError):
+            ProfileUpdateSchema(current_password='short', email='test@example.com')
+
+    def test_rejects_short_new_password(self):
+        """Rejects new_password shorter than 6 chars."""
+        from app.schemas.validators import ProfileUpdateSchema
+
+        with pytest.raises(ValidationError):
+            ProfileUpdateSchema(current_password='pass1234', new_password='short')
+
+
+class TestDeckCardAction:
+    """Unit tests for DeckCardAction schema."""
+
+    def test_valid_payload(self):
+        """Accepts valid add payload."""
+        from app.schemas.validators import DeckCardAction
+
+        schema = DeckCardAction(set_id='OP01', card_id='001', section='main', quantity=2)
+        assert schema.set_id == 'OP01'
+        assert schema.card_id == '001'
+        assert schema.section == 'main'
+        assert schema.quantity == 2
+
+    def test_valid_sideboard(self):
+        """Accepts sideboard section."""
+        from app.schemas.validators import DeckCardAction
+
+        schema = DeckCardAction(set_id='OP01', card_id='001', section='sideboard')
+        assert schema.section == 'sideboard'
+        assert schema.quantity == 1  # default
+
+    def test_invalid_section(self):
+        """Rejects invalid section value."""
+        from app.schemas.validators import DeckCardAction
+
+        with pytest.raises(ValidationError):
+            DeckCardAction(set_id='OP01', card_id='001', section='extra')
+
+    def test_zero_quantity(self):
+        """Rejects zero quantity."""
+        from app.schemas.validators import DeckCardAction
+
+        with pytest.raises(ValidationError):
+            DeckCardAction(set_id='OP01', card_id='001', section='main', quantity=0)
+
+    def test_missing_set_id(self):
+        """Rejects missing set_id."""
+        from app.schemas.validators import DeckCardAction
+
+        with pytest.raises(ValidationError):
+            DeckCardAction(card_id='001', section='main')
+
+    def test_missing_card_id(self):
+        """Rejects missing card_id."""
+        from app.schemas.validators import DeckCardAction
+
+        with pytest.raises(ValidationError):
+            DeckCardAction(set_id='OP01', section='main')
+
+
 class TestValidateJsonDecorator:
     """Integration tests for @validate_json decorator with a mini Flask app."""
 
