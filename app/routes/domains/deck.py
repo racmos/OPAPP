@@ -148,7 +148,8 @@ def add_deck_card(deck_id: int):
     try:
         deck_obj.add_card(data.section, data.set_id, data.card_id, data.quantity)
     except ValueError as e:
-        return jsonify({'success': False, 'message': str(e)}), 400
+        deck_bp.logger.warning("Invalid add_card request for deck_id=%s by user=%s: %s", deck_id, current_user.username, str(e))
+        return jsonify({'success': False, 'message': 'Invalid card operation'}), 400
 
     db.session.commit()
     return jsonify({'success': True})
