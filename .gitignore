@@ -22,3 +22,4 @@ app/static/images/cards/**/
 !app/static/images/cards/.gitkeep
 .coverage
 opapp.service
+.agents/

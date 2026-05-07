@@ -4,12 +4,12 @@ Deck routes module.
 
 from datetime import datetime
 
-from flask import Blueprint, abort, jsonify, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app import db
-from app.models import OpDeck
-from app.schemas.validators import DeckSave, validate_json
+from app.models import OpCard, OpDeck
+from app.schemas.validators import DeckCardAction, DeckSave, validate_json
 
 deck_bp = Blueprint('deck', __name__, url_prefix='/onepiecetcg/deck')
 
@@ -126,4 +126,51 @@ def delete_deck():
     db.session.delete(deck_obj)
     db.session.commit()
 
+    return jsonify({'success': True})
+
+
+@deck_bp.route('/<int:deck_id>/cards/add', methods=['POST'])
+@login_required
+@validate_json(DeckCardAction)
+def add_deck_card(deck_id: int):
+    """Add cards to a deck section."""
+    data = request.validated_data
+
+    deck_obj = OpDeck.query.get_or_404(deck_id)
+    if deck_obj.opdck_user != current_user.username:
+        abort(404)
+
+    # Verify card exists
+    card = OpCard.query.filter_by(opcar_opset_id=data.set_id, opcar_id=data.card_id, opcar_version='p0').first()
+    if not card:
+        return jsonify({'success': False, 'message': 'Card does not exist'}), 400
+
+    try:
+        deck_obj.add_card(data.section, data.set_id, data.card_id, data.quantity)
+    except ValueError as e:
+        deck_bp.logger.warning("Invalid add_card request for deck_id=%s by user=%s: %s", deck_id, current_user.username, str(e))
+        return jsonify({'success': False, 'message': 'Invalid card operation'}), 400
+
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@deck_bp.route('/<int:deck_id>/cards/remove', methods=['POST'])
+@login_required
+@validate_json(DeckCardAction)
+def remove_deck_card(deck_id: int):
+    """Remove cards from a deck section."""
+    data = request.validated_data
+
+    deck_obj = OpDeck.query.get_or_404(deck_id)
+    if deck_obj.opdck_user != current_user.username:
+        abort(404)
+
+    try:
+        deck_obj.remove_card(data.section, data.set_id, data.card_id, data.quantity)
+    except ValueError as e:
+        current_app.logger.warning("Deck card removal validation failed", exc_info=True)
+        return jsonify({'success': False, 'message': 'Invalid card removal request'}), 400
+
+    db.session.commit()
     return jsonify({'success': True})

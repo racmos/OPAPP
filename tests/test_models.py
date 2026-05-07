@@ -307,6 +307,139 @@ class TestOpDeck:
         assert deck.user == 'testuser'
 
 
+class TestOpDeckCardMethods:
+    """Unit tests for OpDeck.add_card and remove_card instance methods."""
+
+    def test_add_card_creates_new_entry(self):
+        """add_card creates a new card entry in the section."""
+        from app.models import OpDeck
+
+        deck = OpDeck(opdck_user='testuser', opdck_name='Test Deck')
+        result = deck.add_card('main', 'OP01', '001', 2)
+        assert len(result) == 1
+        assert result[0] == {'set': 'OP01', 'id': '001', 'qty': 2}
+        assert deck.opdck_ncards == 2
+        assert deck.opdck_cards['main'] == [{'set': 'OP01', 'id': '001', 'qty': 2}]
+
+    def test_add_card_increments_existing(self):
+        """add_card increments qty for an existing card."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 1}]},
+            opdck_ncards=1,
+        )
+        result = deck.add_card('main', 'OP01', '001', 1)
+        assert result[0]['qty'] == 2
+        assert deck.opdck_ncards == 2
+
+    def test_add_card_enforces_4_copy_limit(self):
+        """add_card raises ValueError when exceeding 4 copies."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 4}]},
+            opdck_ncards=4,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            deck.add_card('main', 'OP01', '001', 1)
+        assert '4' in str(exc_info.value)
+        assert deck.opdck_ncards == 4  # unchanged
+
+    def test_add_card_enforces_60_main_limit(self):
+        """add_card raises ValueError when main deck exceeds 60 cards."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 60}]},
+            opdck_ncards=60,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            deck.add_card('main', 'OP01', '002', 1)
+        assert '60' in str(exc_info.value)
+
+    def test_add_card_enforces_15_sideboard_limit(self):
+        """add_card raises ValueError when sideboard exceeds 15 cards."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'sideboard': [{'set': 'OP01', 'id': '001', 'qty': 15}]},
+            opdck_ncards=15,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            deck.add_card('sideboard', 'OP01', '002', 1)
+        assert '15' in str(exc_info.value)
+
+    def test_add_card_to_empty_deck_initializes_structure(self):
+        """add_card initializes cards structure when None."""
+        from app.models import OpDeck
+
+        deck = OpDeck(opdck_user='testuser', opdck_name='Test Deck')
+        deck.add_card('sideboard', 'OP02', '999', 1)
+        assert deck.opdck_cards == {'main': [], 'sideboard': [{'set': 'OP02', 'id': '999', 'qty': 1}]}
+        assert deck.opdck_ncards == 1
+
+    def test_remove_card_decrements_entry(self):
+        """remove_card reduces qty for an existing card."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 3}]},
+            opdck_ncards=3,
+        )
+        result = deck.remove_card('main', 'OP01', '001', 1)
+        assert result[0]['qty'] == 2
+        assert deck.opdck_ncards == 2
+
+    def test_remove_card_deletes_entry_at_zero(self):
+        """remove_card removes entry entirely when qty reaches zero."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 2}]},
+            opdck_ncards=2,
+        )
+        result = deck.remove_card('main', 'OP01', '001', 2)
+        assert result == []
+        assert deck.opdck_ncards == 0
+        assert deck.opdck_cards['main'] == []
+
+    def test_remove_card_raises_when_not_found(self):
+        """remove_card raises ValueError when card is not in deck."""
+        from app.models import OpDeck
+
+        deck = OpDeck(
+            opdck_user='testuser',
+            opdck_name='Test Deck',
+            opdck_cards={'main': [{'set': 'OP01', 'id': '001', 'qty': 2}]},
+            opdck_ncards=2,
+        )
+        with pytest.raises(ValueError) as exc_info:
+            deck.remove_card('main', 'OP02', '999', 1)
+        assert 'not found' in str(exc_info.value).lower()
+
+    def test_remove_card_raises_when_section_empty(self):
+        """remove_card raises ValueError when section has no cards."""
+        from app.models import OpDeck
+
+        deck = OpDeck(opdck_user='testuser', opdck_name='Test Deck')
+        with pytest.raises(ValueError) as exc_info:
+            deck.remove_card('main', 'OP01', '001', 1)
+        assert 'not found' in str(exc_info.value).lower()
+
+
 class TestCardmarketModels:
     """Tests for Cardmarket models."""
 

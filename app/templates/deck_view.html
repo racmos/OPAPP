@@ -54,6 +54,28 @@
     {% endif %}
 </div>
 
+<!-- Search Cards Button -->
+<div style="margin: 1.5rem 0;">
+    <button class="btn btn-primary" onclick="openCardSearchModal()">
+        <i class="fas fa-search"></i> Search Cards
+    </button>
+</div>
+
+<!-- Card Search Modal -->
+<div id="cardSearchModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:var(--card-bg); padding:2rem; border-radius:8px; width:90%; max-width:600px; max-height:80vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h2 style="color:var(--gold); margin:0;">Search Cards</h2>
+            <button class="btn btn-secondary" onclick="closeCardSearchModal()">&times;</button>
+        </div>
+        <div class="form-group">
+            <input type="text" id="cardSearchInput" placeholder="Type card name..." onkeydown="if(event.key==='Enter')searchCards()">
+            <button class="btn btn-primary" onclick="searchCards()" style="margin-top:0.5rem;">Search</button>
+        </div>
+        <div id="cardSearchResults" style="margin-top:1rem;"></div>
+    </div>
+</div>
+
 <!-- Main Deck -->
 <h2 style="color: var(--gold); margin: 2rem 0 1rem;">
     <i class="fas fa-clone"></i> Main Deck
@@ -67,6 +89,7 @@
             <th>Set</th>
             <th>Card ID</th>
             <th>Qty</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
@@ -76,6 +99,9 @@
             <td>{{ card.set }}</td>
             <td>{{ card.id }}</td>
             <td><strong>{{ card.qty }}</strong></td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="removeDeckCard('{{ card.set }}','{{ card.id }}','main',1)">Remove</button>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
@@ -96,6 +122,7 @@
             <th>Set</th>
             <th>Card ID</th>
             <th>Qty</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody>
@@ -105,6 +132,9 @@
             <td>{{ card.set }}</td>
             <td>{{ card.id }}</td>
             <td><strong>{{ card.qty }}</strong></td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="removeDeckCard('{{ card.set }}','{{ card.id }}','sideboard',1)">Remove</button>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
@@ -131,6 +161,83 @@ async function deleteDeck() {
     } catch (err) {
         alert('Network error');
     }
+}
+
+function openCardSearchModal() {
+    document.getElementById('cardSearchModal').style.display = 'flex';
+    document.getElementById('cardSearchInput').focus();
+}
+
+function closeCardSearchModal() {
+    document.getElementById('cardSearchModal').style.display = 'none';
+    document.getElementById('cardSearchResults').innerHTML = '';
+}
+
+async function searchCards() {
+    const q = document.getElementById('cardSearchInput').value.trim();
+    if (!q) return;
+    const container = document.getElementById('cardSearchResults');
+    container.innerHTML = '<p style="color:var(--text-muted)">Searching...</p>';
+    try {
+        const resp = await fetch('/onepiecetcg/cards/search?q=' + encodeURIComponent(q));
+        const data = await resp.json();
+        if (!data.success || !data.cards.length) {
+            container.innerHTML = '<p style="color:var(--text-muted)">No cards found.</p>';
+            return;
+        }
+        let html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
+        for (const card of data.cards) {
+            html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem; background:var(--bg); border-radius:4px;">';
+            html += '<div><strong>' + escapeHtml(card.name) + '</strong> <span style="color:var(--text-muted)">(' + escapeHtml(card.set_id) + ' ' + escapeHtml(card.card_id) + ')</span></div>';
+            html += '<button class="btn btn-primary btn-sm" onclick="addDeckCard(\'' + escapeHtml(card.set_id) + '\',\'' + escapeHtml(card.card_id) + '\')">Add</button>';
+            html += '</div>';
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (err) {
+        container.innerHTML = '<p style="color:var(--text-muted)">Error searching cards.</p>';
+    }
+}
+
+async function addDeckCard(setId, cardId) {
+    try {
+        const resp = await fetch('/onepiecetcg/deck/{{ deck.id }}/cards/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ set_id: setId, card_id: cardId, section: 'main', quantity: 1 })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Error adding card');
+        }
+    } catch (err) {
+        alert('Network error');
+    }
+}
+
+async function removeDeckCard(setId, cardId, section, qty) {
+    try {
+        const resp = await fetch('/onepiecetcg/deck/{{ deck.id }}/cards/remove', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ set_id: setId, card_id: cardId, section: section, quantity: qty })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.message || 'Error removing card');
+        }
+    } catch (err) {
+        alert('Network error');
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 </script>
 {% endblock %}
