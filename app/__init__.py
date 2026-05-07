@@ -1,6 +1,8 @@
 import os
 
 from flask import Flask
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -10,18 +12,30 @@ from config import Config
 db = SQLAlchemy()
 login = LoginManager()
 login.login_view = 'auth.login'
+limiter = Limiter(key_func=get_remote_address)
 
 
 def create_app(config_class=Config, **test_config):
     # Get the absolute path to the app directory
     app_dir = os.path.dirname(os.path.abspath(__file__))
 
-    app = Flask(__name__, static_folder=os.path.join(app_dir, 'static'), static_url_path='/onepiecetcg/static')
+    app = Flask(
+        __name__,
+        static_folder=os.path.join(app_dir, 'static'),
+        static_url_path='/onepiecetcg/static',
+    )
     app.config.from_object(config_class)
 
     # Apply test configuration overrides before initializing extensions
     if test_config:
         app.config.update(test_config)
+
+    # Validate required configuration in production (not during tests)
+    if not app.config.get('TESTING'):
+        if not app.config.get('SECRET_KEY'):
+            raise RuntimeError('SECRET_KEY is required. Set it in .env or environment.')
+        if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+            raise RuntimeError('DATABASE_URL is required. Set it in .env or environment.')
 
     # Fix engine options and schema for SQLite (used in tests)
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
@@ -66,6 +80,12 @@ def create_app(config_class=Config, **test_config):
 
     db.init_app(app)
     login.init_app(app)
+
+    # Initialize rate limiter (disabled in tests by default)
+    if app.config.get('TESTING'):
+        app.config.setdefault('RATELIMIT_ENABLED', False)
+    limiter.init_app(app)
+
     # Ensure Flask respects X-Forwarded-* and X-Forwarded-Prefix sent by NGINX
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=0)
 

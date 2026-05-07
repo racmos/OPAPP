@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 from flask_login import current_user, login_required, login_user, logout_user
 from pydantic import ValidationError
 
-from app import db
+from app import db, limiter
 from app.models import OpUser
 from app.schemas.validators import LoginSchema, RegisterSchema
 
@@ -10,6 +10,7 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/onepiecetcg')
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
@@ -35,6 +36,7 @@ def login():
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('main.dashboard'))
