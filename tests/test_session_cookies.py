@@ -2,8 +2,6 @@
 Tests for session cookie security flags.
 """
 
-import pytest
-
 from app import create_app
 
 
