@@ -4,7 +4,7 @@ Deck routes module.
 
 from datetime import datetime
 
-from flask import Blueprint, abort, jsonify, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from flask_login import current_user, login_required
 
 from app import db
@@ -169,7 +169,8 @@ def remove_deck_card(deck_id: int):
     try:
         deck_obj.remove_card(data.section, data.set_id, data.card_id, data.quantity)
     except ValueError as e:
-        return jsonify({'success': False, 'message': str(e)}), 400
+        current_app.logger.warning("Deck card removal validation failed", exc_info=True)
+        return jsonify({'success': False, 'message': 'Invalid card removal request'}), 400
 
     db.session.commit()
     return jsonify({'success': True})
