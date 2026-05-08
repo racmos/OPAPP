@@ -24,8 +24,8 @@ def login():
 
     try:
         data = LoginSchema(**request.get_json())
-    except ValidationError as e:
-        return jsonify({'success': False, 'message': 'Invalid request data', 'details': str(e)}), 400
+    except ValidationError:
+        return jsonify({'success': False, 'message': 'Invalid request data'}), 400
 
     user = OpUser.query.filter_by(email=data.email).first()
     if user is None or not user.check_password(data.password):
@@ -50,8 +50,8 @@ def register():
 
     try:
         data = RegisterSchema(**request.get_json())
-    except ValidationError as e:
-        return jsonify({'success': False, 'message': 'Invalid request data', 'details': str(e)}), 400
+    except ValidationError:
+        return jsonify({'success': False, 'message': 'Invalid request data'}), 400
 
     if OpUser.query.filter_by(username=data.username).first():
         return jsonify({'success': False, 'message': 'Username already exists'}), 400

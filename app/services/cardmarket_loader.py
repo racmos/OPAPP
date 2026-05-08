@@ -164,13 +164,21 @@ class CardmarketLoader:
 
     def _download_json(self, url: str, file_type: str) -> Optional[dict]:
         """Download JSON file from URL."""
+        # SSRF protection: only allow Cardmarket S3 domain
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.netloc != 'downloads.s3.cardmarket.com':
+            logger.error('Blocked download from unauthorized host: %s', parsed.netloc)
+            self.errors.append(f'Download blocked for {file_type}: unauthorized host')
+            return None
         try:
             resp = requests.get(url, timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(f'Failed to download {file_type} from {url}: {e}')
-            self.errors.append(f'Download failed for {file_type}: {e!s}')
+            logger.error('Failed to download %s from %s: %s', file_type, url, e)
+            self.errors.append(f'Download failed for {file_type}')
             return None
 
     def _compute_hash(self, data: dict) -> str:

@@ -4,6 +4,7 @@ Scraper, Cardmarket loader, matcher, ignored products, expansion mapping.
 """
 
 import json
+import logging
 
 from flask import Blueprint, Response, jsonify, render_template, request
 from flask_login import login_required
@@ -25,6 +26,8 @@ from app.schemas.validators import (
     OpExtract,
     validate_json,
 )
+
+logger = logging.getLogger(__name__)
 
 price_bp = Blueprint('price', __name__, url_prefix='/onepiecetcg/price')
 
@@ -50,8 +53,9 @@ def refresh_op_sets():
     try:
         result = _refresh()
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e), 'sets': []}), 500
+    except Exception:
+        logger.exception('refresh-op-sets failed')
+        return jsonify({'success': False, 'message': 'Internal server error', 'sets': []}), 500
 
 
 @price_bp.route('/extract-op-cards', methods=['POST'])
@@ -68,8 +72,9 @@ def extract_op_cards():
     try:
         result = _extract(filter_sets=filter_sets)
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'steps': [], 'stats': {}, 'errors': [str(e)]}), 500
+    except Exception:
+        logger.exception('extract-op-cards failed')
+        return jsonify({'success': False, 'steps': [], 'stats': {}, 'errors': ['Internal server error']}), 500
 
 
 # =========================================================================
@@ -96,8 +101,9 @@ def cardmarket_load():
         loader = CardmarketLoader()
         result = loader.run(urls=urls)
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'steps': [], 'errors': [str(e)]}), 500
+    except Exception:
+        logger.exception('cardmarket-load failed')
+        return jsonify({'success': False, 'steps': [], 'errors': ['Internal server error']}), 500
 
 
 @price_bp.route('/cardmarket-load-sse', methods=['GET'])
@@ -132,8 +138,9 @@ def cardmarket_load_sse():
                 loader = CardmarketLoader(progress_callback=on_step)
                 result = loader.run(urls=urls)
                 q.put(('complete', result))
-            except Exception as e:
-                q.put(('error', {'message': str(e)}))
+            except Exception:
+                logger.exception('cardmarket-load-sse failed')
+                q.put(('error', {'message': 'Internal server error'}))
 
     def event_stream():
         thread = Thread(target=_run_loader)
@@ -173,8 +180,9 @@ def extract_op_cards_sse():
             for step in result.get('steps', []):
                 yield f'event: step\ndata: {json.dumps(step)}\n\n'
             yield f'event: complete\ndata: {json.dumps(result)}\n\n'
-        except Exception as e:
-            yield f'event: error\ndata: {json.dumps({"message": str(e)})}\n\n'
+        except Exception:
+            logger.exception('extract-op-cards-sse failed')
+            yield f'event: error\ndata: {json.dumps({"message": "Internal server error"})}\n\n'
 
     return Response(
         event_stream(),
@@ -689,9 +697,10 @@ def auto_match_route():
     try:
         result = auto_match(dry_run=dry_run, max_groups=max_groups)
         return jsonify(result)
-    except Exception as e:
+    except Exception:
+        logger.exception('auto-match failed')
         db.session.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
 
 
 @price_bp.route('/auto-match/apply', methods=['POST'])
