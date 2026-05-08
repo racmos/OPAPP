@@ -106,24 +106,28 @@ def cardmarket_load():
 @price_bp.route('/cardmarket-unmatched')
 @login_required
 def cardmarket_unmatched():
-    """Get products not yet mapped to internal cards."""
+    """Get products not yet mapped to internal cards with pagination."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 100, type=int)
+
     latest_date = db.session.query(func.max(OpcmProduct.opprd_date)).scalar()
     if not latest_date:
-        return jsonify({'success': True, 'unmatched': [], 'count': 0})
+        return jsonify({'success': True, 'unmatched': [], 'count': 0, 'pages': 0, 'page': 1})
 
     mapped_ids = db.session.query(OpcmProductCardMap.oppcm_id_product).subquery()
 
     ignored_pairs = set((r.opig_id_product, r.opig_name) for r in OpcmIgnored.query.all())
 
-    unmatched_raw = (
+    # Paginated query for unmatched products
+    pagination = (
         OpcmProduct.query.filter(
             OpcmProduct.opprd_date == latest_date, ~OpcmProduct.opprd_id_product.in_(db.session.query(mapped_ids))
         )
         .order_by(OpcmProduct.opprd_name, OpcmProduct.opprd_id_product)
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
 
-    unmatched = [p for p in unmatched_raw if (p.opprd_id_product, p.opprd_name) not in ignored_pairs]
+    unmatched = [p for p in pagination.items if (p.opprd_id_product, p.opprd_name) not in ignored_pairs]
 
     latest_price_date = db.session.query(func.max(OpcmPrice.opprc_date)).scalar()
 
@@ -136,6 +140,8 @@ def cardmarket_unmatched():
         {
             'success': True,
             'count': len(unmatched),
+            'pages': pagination.pages,
+            'page': page,
             'unmatched': [
                 {
                     'id_product': p.opprd_id_product,
