@@ -18,8 +18,8 @@ def _qty_int(raw) -> int:
     """Convert quantity (stored as TEXT) to int safely."""
     try:
         return int(raw)
-    except (TypeError, ValueError):
-        return 0
+    except (TypeError, ValueError) as e:
+        raise ValueError(f'Invalid quantity value: {raw!r}') from e
 
 
 def _null_safe_eq(col, val):

@@ -8,6 +8,8 @@ from typing import Optional
 from flask import jsonify, request
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
+from app.exceptions import ValidationError as AppValidationError
+
 # ============== Validation Decorator ==============
 
 
@@ -52,7 +54,9 @@ def validate_json(schema: type[BaseModel]):
                     }
                 ), 400
             except Exception as e:
-                return jsonify({'success': False, 'error': 'Bad Request', 'message': str(e)}), 400
+                raise AppValidationError(
+                    message='Invalid request data',
+                ) from e
 
             return f(*args, **kwargs)
 
