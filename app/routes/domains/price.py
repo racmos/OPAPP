@@ -122,9 +122,10 @@ def cardmarket_load_sse():
         urls['price_guide'] = data['price_guide_url']
 
     q = Queue()
+    app = current_app._get_current_object()
 
     def _run_loader():
-        with current_app.app_context():
+        with app.app_context():
             try:
 
                 def on_step(step):
