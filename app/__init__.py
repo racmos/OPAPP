@@ -7,6 +7,7 @@ from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from app.exceptions import ConfigurationError
 from config import Config
 
 db = SQLAlchemy()
@@ -33,9 +34,15 @@ def create_app(config_class=Config, **test_config):
     # Validate required configuration in production (not during tests)
     if not app.config.get('TESTING'):
         if not app.config.get('SECRET_KEY'):
-            raise RuntimeError('SECRET_KEY is required. Set it in .env or environment.')
+            raise ConfigurationError(
+                'SECRET_KEY is required. Set it in .env or environment.',
+                config_key='SECRET_KEY',
+            )
         if not app.config.get('SQLALCHEMY_DATABASE_URI'):
-            raise RuntimeError('DATABASE_URL is required. Set it in .env or environment.')
+            raise ConfigurationError(
+                'DATABASE_URL is required. Set it in .env or environment.',
+                config_key='DATABASE_URL',
+            )
 
     # Fix engine options and schema for SQLite (used in tests)
     db_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')

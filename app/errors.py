@@ -5,6 +5,8 @@ Error handlers for the application.
 from flask import jsonify, render_template
 from werkzeug.exceptions import HTTPException
 
+from app.exceptions import AppBaseError, ValidationError
+
 
 def register_error_handlers(app):
     """Register all error handlers with the app."""
@@ -59,6 +61,23 @@ def register_error_handlers(app):
                 }
             ), 400
         return _render_error_template('400', error), 400
+
+    @app.errorhandler(ValidationError)
+    def validation_error(error):
+        """Handle validation errors."""
+        if request_wants_json():
+            response = {'success': False, 'error': 'Validation Error', 'message': error.message}
+            if error.field:
+                response['field'] = error.field
+            return jsonify(response), 422
+        return _render_error_template('422', error), 422
+
+    @app.errorhandler(AppBaseError)
+    def app_base_error(error):
+        """Handle all other application-specific errors."""
+        if request_wants_json():
+            return jsonify({'success': False, 'error': error.__class__.__name__, 'message': error.message}), 500
+        return _render_error_template('500', error), 500
 
     @app.errorhandler(Exception)
     def handle_exception(error):
