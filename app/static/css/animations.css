@@ -1,0 +1,116 @@
+/*
+ * Visual polish: parallax backgrounds + scroll-triggered reveals.
+ * Pure CSS + minimal JS — no external libraries.
+ */
+
+/* ============================================================
+   PARALLAX HERO (dashboard)
+   ============================================================ */
+
+.parallax-hero {
+    position: relative;
+    min-height: 40vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin: -2rem -2rem 2rem -2rem;
+    border-radius: 0 0 16px 16px;
+}
+
+.parallax-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    will-change: transform;
+}
+
+/* Deep background — slowest */
+.parallax-layer--deep {
+    background:
+        radial-gradient(ellipse at 20% 80%, rgba(0, 178, 207, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(192, 57, 43, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(243, 156, 18, 0.04) 0%, transparent 60%);
+    transform: translateY(calc(var(--scroll, 0) * 0.1px));
+}
+
+/* Mid layer — medium speed */
+.parallax-layer--mid {
+    background:
+        radial-gradient(circle at 10% 30%, rgba(0, 178, 207, 0.05) 0%, transparent 25%),
+        radial-gradient(circle at 90% 70%, rgba(192, 57, 43, 0.04) 0%, transparent 25%);
+    transform: translateY(calc(var(--scroll, 0) * 0.25px));
+}
+
+/* Near layer — fastest */
+.parallax-layer--near {
+    background:
+        radial-gradient(circle at 30% 60%, rgba(255, 255, 255, 0.03) 0%, transparent 15%),
+        radial-gradient(circle at 70% 40%, rgba(243, 156, 18, 0.03) 0%, transparent 15%);
+    transform: translateY(calc(var(--scroll, 0) * 0.45px));
+}
+
+.parallax-hero__content {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    padding: 2rem;
+}
+
+.parallax-hero__title {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1.8rem, 5vw, 3rem);
+    font-weight: 700;
+    color: var(--gold);
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+}
+
+.parallax-hero__subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(0.9rem, 2vw, 1.1rem);
+    font-weight: 300;
+    color: var(--text-muted);
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+/* ============================================================
+   SCROLL-TRIGGERED REVEALS
+   ============================================================ */
+
+.reveal {
+    opacity: 0;
+    transform: translateY(30px) scale(0.96);
+    transition: opacity 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: opacity, transform;
+}
+
+.reveal--visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* Stagger delays for grid items */
+.reveal--delay-1 { transition-delay: 0.05s; }
+.reveal--delay-2 { transition-delay: 0.10s; }
+.reveal--delay-3 { transition-delay: 0.15s; }
+.reveal--delay-4 { transition-delay: 0.20s; }
+.reveal--delay-5 { transition-delay: 0.25s; }
+.reveal--delay-6 { transition-delay: 0.30s; }
+.reveal--delay-7 { transition-delay: 0.35s; }
+.reveal--delay-8 { transition-delay: 0.40s; }
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+    .parallax-layer {
+        transform: none !important;
+    }
+}
