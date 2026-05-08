@@ -208,8 +208,12 @@
         {% endfor %}
         {% else %}
         <tr>
-            <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                Your collection is empty. Add cards using the form above!
+            <td colspan="10">
+                <div class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    <h3>Your collection is empty</h3>
+                    <p>Add cards using the form above to start building your treasure!</p>
+                </div>
             </td>
         </tr>
         {% endif %}

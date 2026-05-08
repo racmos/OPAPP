@@ -540,6 +540,7 @@
 </div>
 {% endif %}
 
+{% if cards %}
 <!-- Card Grid -->
 <div class="card-grid" id="cardGridView" style="{% if view == 'list' %}display:none;{% endif %}">
     {% for card in cards %}
@@ -632,6 +633,13 @@
         </tbody>
     </table>
 </div>
+{% else %}
+<div class="empty-state">
+    <i class="fa-solid fa-compass"></i>
+    <h3>No cards found</h3>
+    <p>Try adjusting your filters or search criteria to discover new treasures.</p>
+</div>
+{% endif %}
 
 <!-- BOTTOM Pagination -->
 {% if pagination.pages > 1 %}
