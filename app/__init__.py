@@ -134,4 +134,28 @@ def create_app(config_class=Config, **test_config):
 
     register_error_handlers(app)
 
+    # Security headers
+    @app.after_request
+    def _set_security_headers(response):
+        """Add security headers to all responses."""
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+        response.headers['Permissions-Policy'] = (
+            'accelerometer=(), camera=(), geolocation=(), gyroscope=(), '
+            'magnetometer=(), microphone=(), payment=(), usb=()'
+        )
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self'"
+        )
+        # HSTS only in production (not during tests)
+        if not app.config.get('TESTING'):
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        return response
+
     return app
