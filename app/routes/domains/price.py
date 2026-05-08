@@ -125,38 +125,63 @@ def cardmarket_load_sse():
     app = current_app._get_current_object()
 
     def _run_loader():
+        logger.info('SSE loader thread started')
         with app.app_context():
             try:
 
                 def on_step(step):
+                    logger.info('SSE step: %s - %s', step.get('step'), step.get('status'))
                     q.put(('step', step))
 
                 loader = CardmarketLoader(progress_callback=on_step)
                 result = loader.run(urls=urls)
+                logger.info('SSE loader completed: %s', result.get('success'))
                 q.put(('complete', result))
-            except Exception:
-                logger.exception('cardmarket-load-sse failed')
+            except Exception as e:
+                logger.exception('SSE loader failed: %s', e)
                 q.put(('error', {'message': 'Internal server error'}))
 
     def event_stream():
+        logger.info('SSE event stream started')
+        # Send connected event immediately
+        yield 'event: connected\ndata: {}\n\n'
+
         thread = Thread(target=_run_loader)
         thread.start()
+        logger.info('SSE loader thread started')
+
         while True:
             try:
-                evt_type, evt_data = q.get(timeout=1)
-            except Empty:
-                if not thread.is_alive():
+                evt_type, evt_data = q.get(timeout=5)
+                logger.info('SSE yielding event: %s', evt_type)
+                yield f'event: {evt_type}\ndata: {json.dumps(evt_data)}\n\n'
+                if evt_type in ('complete', 'error'):
                     break
+            except Empty:
+                logger.warning('SSE queue timeout, thread alive: %s', thread.is_alive())
+                if not thread.is_alive():
+                    logger.warning('SSE thread died, breaking')
+                    break
+                # Send ping to keep connection alive
+                yield 'event: ping\ndata: {}\n\n'
                 continue
-            yield f'event: {evt_type}\ndata: {json.dumps(evt_data)}\n\n'
-            if evt_type in ('complete', 'error'):
+            except Exception as e:
+                logger.exception('SSE generator error: %s', e)
+                yield f'event: error\ndata: {json.dumps({"message": str(e)})}\n\n'
                 break
-        thread.join()
+
+        logger.info('SSE event stream ending')
+        thread.join(timeout=10)
+        logger.info('SSE thread joined')
 
     return Response(
         event_stream(),
         mimetype='text/event-stream',
-        headers={'X-Accel-Buffering': 'no'},
+        headers={
+            'X-Accel-Buffering': 'no',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        },
     )
 
 
@@ -171,6 +196,7 @@ def extract_op_cards_sse():
     filter_sets = json.loads(sets_param) if sets_param else None
 
     def event_stream():
+        yield 'event: connected\ndata: {}\n\n'
         try:
             result = _extract(filter_sets=filter_sets)
             for step in result.get('steps', []):
@@ -183,7 +209,11 @@ def extract_op_cards_sse():
     return Response(
         event_stream(),
         mimetype='text/event-stream',
-        headers={'X-Accel-Buffering': 'no'},
+        headers={
+            'X-Accel-Buffering': 'no',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        },
     )
 
 

@@ -74,10 +74,12 @@ class TestSSEEndpoints:
         mock_result = {'success': True, 'steps': [], 'stats': {}}
 
         with patch('app.services.onepiece_scraper.extract_op_cards', return_value=mock_result) as mock_extract:
-            logged_client.get(
+            resp = logged_client.get(
                 '/onepiecetcg/price/extract-op-cards-sse',
                 query_string={'sets': '[{"id":"OP01","code":"OP-01"}]'},
             )
+            # Consume response to trigger generator execution
+            _ = resp.data
             mock_extract.assert_called_once()
             call_kwargs = mock_extract.call_args.kwargs
             assert call_kwargs['filter_sets'] == [{'id': 'OP01', 'code': 'OP-01'}]

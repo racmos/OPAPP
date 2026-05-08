@@ -457,9 +457,31 @@
         `;
 
         const tbody = document.getElementById('cardmarketStatusBody');
+        let sseConnected = false;
+        let sseTimeout = null;
+        
         const evtSource = new EventSource('/onepiecetcg/price/cardmarket-load-sse');
+        
+        // Timeout: if no connected event in 10s, fallback to POST
+        sseTimeout = setTimeout(function() {
+            if (!sseConnected) {
+                evtSource.close();
+                document.getElementById('cardmarketStatusMessage').innerHTML = `
+                    <div class="alert alert-warning">
+                        <strong>SSE timeout</strong> Falling back to regular request...
+                    </div>
+                `;
+                loadCardmarketDataFallback();
+            }
+        }, 10000);
+
+        evtSource.addEventListener('connected', function(e) {
+            sseConnected = true;
+            console.log('SSE connected');
+        });
 
         evtSource.addEventListener('step', function(e) {
+            sseConnected = true;
             const step = JSON.parse(e.data);
             const row = tbody.insertRow();
             const statusClass = step.status.toLowerCase();
@@ -471,6 +493,7 @@
         });
 
         evtSource.addEventListener('complete', function(e) {
+            clearTimeout(sseTimeout);
             evtSource.close();
             const result = JSON.parse(e.data);
 
@@ -500,7 +523,13 @@
         });
 
         evtSource.addEventListener('error', function(e) {
+            clearTimeout(sseTimeout);
             evtSource.close();
+            if (!sseConnected) {
+                // Connection failed immediately - fallback to POST
+                loadCardmarketDataFallback();
+                return;
+            }
             let msg = 'Error de conexion SSE';
             try { msg = JSON.parse(e.data).message; } catch (_) {}
             document.getElementById('cardmarketStatusMessage').innerHTML = `
@@ -511,6 +540,64 @@
             btn.disabled = false;
             btn.textContent = 'Cardmarket Data Tables';
         });
+    }
+
+    // === Cardmarket Fallback (POST) ===
+    async function loadCardmarketDataFallback() {
+        const btn = document.getElementById('cardmarketLoadBtn');
+        const tbody = document.getElementById('cardmarketStatusBody');
+        
+        try {
+            const response = await fetch('/onepiecetcg/price/cardmarket-load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const result = await response.json();
+            
+            if (result.steps) {
+                result.steps.forEach(step => {
+                    const row = tbody.insertRow();
+                    const statusClass = step.status.toLowerCase();
+                    row.innerHTML = `
+                        <td>${step.step}</td>
+                        <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
+                        <td>${step.message}</td>
+                    `;
+                });
+            }
+            
+            if (result.success) {
+                document.getElementById('cardmarketStatusMessage').innerHTML = `
+                    <div class="alert alert-success">
+                        <strong>Cardmarket data loaded successfully!</strong><br>
+                        Date: ${result.date}
+                    </div>
+                `;
+            } else {
+                let errorHtml = '';
+                if (result.errors && result.errors.length > 0) {
+                    errorHtml = '<ul>' + result.errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+                }
+                document.getElementById('cardmarketStatusMessage').innerHTML = `
+                    <div class="alert alert-error">
+                        <strong>Cardmarket load failed!</strong>
+                        ${errorHtml}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            document.getElementById('cardmarketStatusMessage').innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Cardmarket Data Tables';
+            checkUnmatched();
+            checkUnmappedExpansions();
+        }
     }
 
     // === Review Modal ===
