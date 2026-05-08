@@ -89,14 +89,9 @@ def cardmarket_load():
     from app.services.cardmarket_loader import CARDMARKET_URLS, CardmarketLoader
 
     try:
-        data = request.get_json(silent=True) or {}
+        # Security: do not allow request payload to override outbound URLs.
+        # Always use server-side allowlisted Cardmarket endpoints.
         urls = dict(CARDMARKET_URLS)
-        if data.get('singles_url'):
-            urls['singles'] = data['singles_url']
-        if data.get('nonsingles_url'):
-            urls['nonsingles'] = data['nonsingles_url']
-        if data.get('price_guide_url'):
-            urls['price_guide'] = data['price_guide_url']
 
         loader = CardmarketLoader()
         result = loader.run(urls=urls)
