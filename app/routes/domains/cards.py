@@ -29,50 +29,53 @@ def _build_price_map(card_items):
     # Collect card identifiers from this page
     card_keys = [(c.opcar_opset_id, c.opcar_id, c.opcar_version) for c in card_items]
 
-    # Find mappings to Cardmarket products for these cards
-    mappings = OpcmProductCardMap.query.filter(
-        db.tuple_(
-            OpcmProductCardMap.oppcm_opset_id, OpcmProductCardMap.oppcm_opcar_id, OpcmProductCardMap.oppcm_opcar_version
-        ).in_(card_keys)
-    ).all()
+    # Find latest price date via subquery
+    latest_date_sq = db.session.query(db.func.max(OpcmPrice.opprc_date)).scalar_subquery()
 
-    if not mappings:
+    # Single optimized query: join mappings → prices on latest date
+    results = (
+        db.session.query(
+            OpcmProductCardMap.oppcm_opset_id,
+            OpcmProductCardMap.oppcm_opcar_id,
+            OpcmProductCardMap.oppcm_opcar_version,
+            OpcmProductCardMap.oppcm_foil,
+            OpcmPrice.opprc_low,
+        )
+        .join(
+            OpcmPrice,
+            db.and_(
+                OpcmProductCardMap.oppcm_id_product == OpcmPrice.opprc_id_product,
+                OpcmPrice.opprc_date == latest_date_sq,
+            ),
+        )
+        .filter(
+            db.tuple_(
+                OpcmProductCardMap.oppcm_opset_id,
+                OpcmProductCardMap.oppcm_opcar_id,
+                OpcmProductCardMap.oppcm_opcar_version,
+            ).in_(card_keys)
+        )
+        .all()
+    )
+
+    if not results:
         return {}
 
-    # Get product IDs, prioritizing non-foil (outer join: prefer N or NULL over S)
-    product_ids = list({m.oppcm_id_product for m in mappings})
-
-    # Find latest price date
-    latest_date = db.session.query(db.func.max(OpcmPrice.opprc_date)).scalar()
-    if not latest_date:
-        return {}
-
-    # Get prices for these products on the latest date
-    prices = OpcmPrice.query.filter(
-        OpcmPrice.opprc_date == latest_date, OpcmPrice.opprc_id_product.in_(product_ids)
-    ).all()
-
-    product_price = {}
-    for p in prices:
-        # Prefer non-foil price; foil stored in same product sometimes
-        if p.opprc_id_product not in product_price:
-            product_price[p.opprc_id_product] = p.opprc_low
-        # Always keep the lowest price if multiple rows
-        elif product_price[p.opprc_id_product] is not None and p.opprc_low is not None:
-            if p.opprc_low < product_price[p.opprc_id_product]:
-                product_price[p.opprc_id_product] = p.opprc_low
-
-    # Build mapping key → price
-    key_to_product = {}
-    for m in mappings:
-        k = (m.oppcm_opset_id, m.oppcm_opcar_id, m.oppcm_opcar_version)
-        if k not in key_to_product or m.oppcm_foil is None or m.oppcm_foil == 'N':
-            # Prefer non-foil mapping
-            key_to_product[k] = m.oppcm_id_product
+    # Build map: prefer non-foil (None/'N' over 'S'), keep lowest price
+    key_to_price = {}
+    for opset_id, card_id, version, foil, low in results:
+        k = (opset_id, card_id, version)
+        # Prefer non-foil mapping; if same foil, keep lowest price
+        is_preferred = foil is None or foil == 'N'
+        current = key_to_price.get(k)
+        if current is None or (is_preferred and not (current[1] is None or current[1] == 'N')):
+            key_to_price[k] = (low, foil)
+        elif (is_preferred == (current[1] is None or current[1] == 'N')) and low is not None:
+            if current[0] is None or low < current[0]:
+                key_to_price[k] = (low, foil)
 
     price_map = {}
-    for k, pid in key_to_product.items():
-        low = product_price.get(pid)
+    for k, (low, _foil) in key_to_price.items():
         if low is not None:
             try:
                 price_map[k] = f'€{float(low):.2f}'
