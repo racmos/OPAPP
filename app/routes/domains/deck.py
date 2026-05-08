@@ -148,7 +148,9 @@ def add_deck_card(deck_id: int):
     try:
         deck_obj.add_card(data.section, data.set_id, data.card_id, data.quantity)
     except ValueError as e:
-        deck_bp.logger.warning("Invalid add_card request for deck_id=%s by user=%s: %s", deck_id, current_user.username, str(e))
+        deck_bp.logger.warning(
+            'Invalid add_card request for deck_id=%s by user=%s: %s', deck_id, current_user.username, str(e)
+        )
         return jsonify({'success': False, 'message': 'Invalid card operation'}), 400
 
     db.session.commit()
@@ -168,8 +170,8 @@ def remove_deck_card(deck_id: int):
 
     try:
         deck_obj.remove_card(data.section, data.set_id, data.card_id, data.quantity)
-    except ValueError as e:
-        current_app.logger.warning("Deck card removal validation failed", exc_info=True)
+    except ValueError:
+        current_app.logger.warning('Deck card removal validation failed', exc_info=True)
         return jsonify({'success': False, 'message': 'Invalid card removal request'}), 400
 
     db.session.commit()
