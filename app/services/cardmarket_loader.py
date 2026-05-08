@@ -162,6 +162,10 @@ class CardmarketLoader:
             self.errors.append(str(e))
             return self._result(False)
 
+    def _sanitize_for_log(self, value: object) -> str:
+        """Sanitize user-influenced values before logging to prevent log injection."""
+        return str(value).replace('\r', '').replace('\n', '')
+
     def _download_json(self, url: str, file_type: str) -> Optional[dict]:
         """Download JSON file from URL."""
         # SSRF protection: only allow Cardmarket S3 domain
@@ -177,7 +181,8 @@ class CardmarketLoader:
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error('Failed to download %s from %s: %s', file_type, url, e)
+            safe_url = self._sanitize_for_log(url)
+            logger.error('Failed to download %s from %s: %s', file_type, safe_url, e)
             self.errors.append(f'Download failed for {file_type}')
             return None
 
