@@ -63,8 +63,12 @@
         {% endfor %}
         {% else %}
         <tr>
-            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                No sets found. Add one to get started!
+            <td colspan="5">
+                <div class="empty-state">
+                    <i class="fa-solid fa-map"></i>
+                    <h3>No sets found</h3>
+                    <p>Add your first set to start charting the Grand Line!</p>
+                </div>
             </td>
         </tr>
         {% endif %}

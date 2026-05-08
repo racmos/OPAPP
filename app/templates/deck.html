@@ -64,8 +64,10 @@
     </a>
     {% endfor %}
     {% else %}
-    <div class="card" style="text-align: center; grid-column: 1 / -1; padding: 3rem; color: var(--text-muted);">
-        <p>No decks yet. Create your first deck!</p>
+    <div class="card empty-state" style="grid-column: 1 / -1;">
+        <i class="fa-solid fa-ship"></i>
+        <h3>No decks yet</h3>
+        <p>Create your first deck and set sail for victory!</p>
     </div>
     {% endif %}
 </div>
