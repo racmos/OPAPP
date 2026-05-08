@@ -36,7 +36,7 @@ class TestConfig:
         os.environ.pop('SECRET_KEY', None)
 
     def test_raises_without_secret_key_in_production(self):
-        """create_app should raise RuntimeError if SECRET_KEY is unset and not TESTING."""
+        """create_app should raise ConfigurationError if SECRET_KEY is unset and not TESTING."""
 
         class _TestConfig:
             SECRET_KEY = None
@@ -45,8 +45,9 @@ class TestConfig:
             SQLALCHEMY_ENGINE_OPTIONS = {}
 
         from app import create_app
+        from app.exceptions import ConfigurationError
 
-        with pytest.raises(RuntimeError, match='SECRET_KEY'):
+        with pytest.raises(ConfigurationError, match='SECRET_KEY'):
             create_app(config_class=_TestConfig)
 
     def test_accepts_secret_key_from_env(self):
@@ -76,7 +77,7 @@ class TestConfig:
         os.environ.pop('DATABASE_URL', None)
 
     def test_raises_without_database_url_in_production(self):
-        """create_app should raise RuntimeError if DATABASE_URL is unset and not TESTING."""
+        """create_app should raise ConfigurationError if DATABASE_URL is unset and not TESTING."""
 
         class _TestConfig:
             SECRET_KEY = 'test-secret-key'
@@ -85,8 +86,9 @@ class TestConfig:
             SQLALCHEMY_ENGINE_OPTIONS = {}
 
         from app import create_app
+        from app.exceptions import ConfigurationError
 
-        with pytest.raises(RuntimeError, match='DATABASE_URL'):
+        with pytest.raises(ConfigurationError, match='DATABASE_URL'):
             create_app(config_class=_TestConfig)
 
     def test_accepts_database_url_from_env(self):
