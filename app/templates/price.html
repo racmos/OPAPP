@@ -373,27 +373,27 @@
             </div>
         `;
 
-        try {
-            const response = await fetch('/onepiecetcg/price/extract-op-cards', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sets: selectedSets })
-            });
+        const tbody = document.getElementById('opStatusBody');
+        const params = new URLSearchParams();
+        if (selectedSets.length > 0) {
+            params.set('sets', JSON.stringify(selectedSets));
+        }
+        const evtSource = new EventSource(`/onepiecetcg/price/extract-op-cards-sse?${params}`);
 
-            const result = await response.json();
-            const tbody = document.getElementById('opStatusBody');
+        evtSource.addEventListener('step', function(e) {
+            const step = JSON.parse(e.data);
+            const row = tbody.insertRow();
+            const statusClass = step.status.toLowerCase();
+            row.innerHTML = `
+                <td>${step.step}</td>
+                <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
+                <td>${step.message}</td>
+            `;
+        });
 
-            if (result.steps) {
-                result.steps.forEach(step => {
-                    const row = tbody.insertRow();
-                    const statusClass = step.status.toLowerCase();
-                    row.innerHTML = `
-                        <td>${step.step}</td>
-                        <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
-                        <td>${step.message}</td>
-                    `;
-                });
-            }
+        evtSource.addEventListener('complete', function(e) {
+            evtSource.close();
+            const result = JSON.parse(e.data);
 
             if (result.stats) {
                 const s = result.stats;
@@ -423,16 +423,22 @@
                     </div>
                 `;
             }
-        } catch (error) {
-            document.getElementById('opStatusMessage').innerHTML = `
-                <div class="alert alert-error">
-                    <strong>Error:</strong> ${error.message}
-                </div>
-            `;
-        } finally {
             btn.disabled = false;
             btn.textContent = 'Extraer cartas One Piece';
-        }
+        });
+
+        evtSource.addEventListener('error', function(e) {
+            evtSource.close();
+            let msg = 'Error de conexion SSE';
+            try { msg = JSON.parse(e.data).message; } catch (_) {}
+            document.getElementById('opStatusMessage').innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${msg}
+                </div>
+            `;
+            btn.disabled = false;
+            btn.textContent = 'Extraer cartas One Piece';
+        });
     }
 
     // === Cardmarket Functions ===
@@ -450,27 +456,23 @@
             </div>
         `;
 
-        try {
-            const response = await fetch('/onepiecetcg/price/cardmarket-load', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
+        const tbody = document.getElementById('cardmarketStatusBody');
+        const evtSource = new EventSource('/onepiecetcg/price/cardmarket-load-sse');
 
-            const result = await response.json();
-            const tbody = document.getElementById('cardmarketStatusBody');
+        evtSource.addEventListener('step', function(e) {
+            const step = JSON.parse(e.data);
+            const row = tbody.insertRow();
+            const statusClass = step.status.toLowerCase();
+            row.innerHTML = `
+                <td>${step.step}</td>
+                <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
+                <td>${step.message}</td>
+            `;
+        });
 
-            if (result.steps) {
-                result.steps.forEach(step => {
-                    const row = tbody.insertRow();
-                    const statusClass = step.status.toLowerCase();
-                    row.innerHTML = `
-                        <td>${step.step}</td>
-                        <td><span class="status-badge status-${statusClass}">${step.status}</span></td>
-                        <td>${step.message}</td>
-                    `;
-                });
-            }
+        evtSource.addEventListener('complete', function(e) {
+            evtSource.close();
+            const result = JSON.parse(e.data);
 
             if (result.success) {
                 document.getElementById('cardmarketStatusMessage').innerHTML = `
@@ -482,7 +484,7 @@
             } else {
                 let errorHtml = '';
                 if (result.errors && result.errors.length > 0) {
-                    errorHtml = '<ul>' + result.errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+                    errorHtml = '<ul>' + result.errors.map(err => `<li>${err}</li>`).join('') + '</ul>';
                 }
                 document.getElementById('cardmarketStatusMessage').innerHTML = `
                     <div class="alert alert-error">
@@ -491,18 +493,24 @@
                     </div>
                 `;
             }
-        } catch (error) {
-            document.getElementById('cardmarketStatusMessage').innerHTML = `
-                <div class="alert alert-error">
-                    <strong>Error:</strong> ${error.message}
-                </div>
-            `;
-        } finally {
             btn.disabled = false;
             btn.textContent = 'Cardmarket Data Tables';
             checkUnmatched();
             checkUnmappedExpansions();
-        }
+        });
+
+        evtSource.addEventListener('error', function(e) {
+            evtSource.close();
+            let msg = 'Error de conexion SSE';
+            try { msg = JSON.parse(e.data).message; } catch (_) {}
+            document.getElementById('cardmarketStatusMessage').innerHTML = `
+                <div class="alert alert-error">
+                    <strong>Error:</strong> ${msg}
+                </div>
+            `;
+            btn.disabled = false;
+            btn.textContent = 'Cardmarket Data Tables';
+        });
     }
 
     // === Review Modal ===

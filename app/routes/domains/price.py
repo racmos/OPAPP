@@ -3,7 +3,10 @@ Price routes for One Piece TCG.
 Scraper, Cardmarket loader, matcher, ignored products, expansion mapping.
 """
 
-from flask import Blueprint, jsonify, render_template, request
+import json
+import logging
+
+from flask import Blueprint, Response, jsonify, render_template, request
 from flask_login import login_required
 from sqlalchemy import func
 
@@ -23,6 +26,8 @@ from app.schemas.validators import (
     OpExtract,
     validate_json,
 )
+
+logger = logging.getLogger(__name__)
 
 price_bp = Blueprint('price', __name__, url_prefix='/onepiecetcg/price')
 
@@ -48,8 +53,9 @@ def refresh_op_sets():
     try:
         result = _refresh()
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e), 'sets': []}), 500
+    except Exception:
+        logger.exception('refresh-op-sets failed')
+        return jsonify({'success': False, 'message': 'Internal server error', 'sets': []}), 500
 
 
 @price_bp.route('/extract-op-cards', methods=['POST'])
@@ -66,8 +72,9 @@ def extract_op_cards():
     try:
         result = _extract(filter_sets=filter_sets)
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'steps': [], 'stats': {}, 'errors': [str(e)]}), 500
+    except Exception:
+        logger.exception('extract-op-cards failed')
+        return jsonify({'success': False, 'steps': [], 'stats': {}, 'errors': ['Internal server error']}), 500
 
 
 # =========================================================================
@@ -82,20 +89,101 @@ def cardmarket_load():
     from app.services.cardmarket_loader import CARDMARKET_URLS, CardmarketLoader
 
     try:
-        data = request.get_json(silent=True) or {}
+        # Security: do not allow request payload to override outbound URLs.
+        # Always use server-side allowlisted Cardmarket endpoints.
         urls = dict(CARDMARKET_URLS)
-        if data.get('singles_url'):
-            urls['singles'] = data['singles_url']
-        if data.get('nonsingles_url'):
-            urls['nonsingles'] = data['nonsingles_url']
-        if data.get('price_guide_url'):
-            urls['price_guide'] = data['price_guide_url']
 
         loader = CardmarketLoader()
         result = loader.run(urls=urls)
         return jsonify(result)
-    except Exception as e:
-        return jsonify({'success': False, 'steps': [], 'errors': [str(e)]}), 500
+    except Exception:
+        logger.exception('cardmarket-load failed')
+        return jsonify({'success': False, 'steps': [], 'errors': ['Internal server error']}), 500
+
+
+@price_bp.route('/cardmarket-load-sse', methods=['GET'])
+@login_required
+def cardmarket_load_sse():
+    """Load Cardmarket data with Server-Sent Events progress."""
+    from queue import Empty, Queue
+    from threading import Thread
+
+    from flask import current_app
+
+    from app.services.cardmarket_loader import CARDMARKET_URLS, CardmarketLoader
+
+    data = request.args.to_dict()
+    urls = dict(CARDMARKET_URLS)
+    if data.get('singles_url'):
+        urls['singles'] = data['singles_url']
+    if data.get('nonsingles_url'):
+        urls['nonsingles'] = data['nonsingles_url']
+    if data.get('price_guide_url'):
+        urls['price_guide'] = data['price_guide_url']
+
+    q = Queue()
+
+    def _run_loader():
+        with current_app.app_context():
+            try:
+
+                def on_step(step):
+                    q.put(('step', step))
+
+                loader = CardmarketLoader(progress_callback=on_step)
+                result = loader.run(urls=urls)
+                q.put(('complete', result))
+            except Exception:
+                logger.exception('cardmarket-load-sse failed')
+                q.put(('error', {'message': 'Internal server error'}))
+
+    def event_stream():
+        thread = Thread(target=_run_loader)
+        thread.start()
+        while True:
+            try:
+                evt_type, evt_data = q.get(timeout=1)
+            except Empty:
+                if not thread.is_alive():
+                    break
+                continue
+            yield f'event: {evt_type}\ndata: {json.dumps(evt_data)}\n\n'
+            if evt_type in ('complete', 'error'):
+                break
+        thread.join()
+
+    return Response(
+        event_stream(),
+        mimetype='text/event-stream',
+        headers={'X-Accel-Buffering': 'no'},
+    )
+
+
+@price_bp.route('/extract-op-cards-sse', methods=['GET'])
+@login_required
+def extract_op_cards_sse():
+    """Scrape One Piece cards with Server-Sent Events progress."""
+    from app.services.onepiece_scraper import extract_op_cards as _extract
+
+    # Capture request args before entering generator context
+    sets_param = request.args.get('sets')
+    filter_sets = json.loads(sets_param) if sets_param else None
+
+    def event_stream():
+        try:
+            result = _extract(filter_sets=filter_sets)
+            for step in result.get('steps', []):
+                yield f'event: step\ndata: {json.dumps(step)}\n\n'
+            yield f'event: complete\ndata: {json.dumps(result)}\n\n'
+        except Exception:
+            logger.exception('extract-op-cards-sse failed')
+            yield f'event: error\ndata: {json.dumps({"message": "Internal server error"})}\n\n'
+
+    return Response(
+        event_stream(),
+        mimetype='text/event-stream',
+        headers={'X-Accel-Buffering': 'no'},
+    )
 
 
 # =========================================================================
@@ -604,9 +692,10 @@ def auto_match_route():
     try:
         result = auto_match(dry_run=dry_run, max_groups=max_groups)
         return jsonify(result)
-    except Exception as e:
+    except Exception:
+        logger.exception('auto-match failed')
         db.session.rollback()
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
 
 
 @price_bp.route('/auto-match/apply', methods=['POST'])

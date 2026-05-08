@@ -4,7 +4,7 @@ Strict TDD: Tests written BEFORE production code.
 """
 
 import json
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

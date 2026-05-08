@@ -390,9 +390,9 @@ def refresh_op_sets() -> dict:
             'sets': sets,
             'count': len(sets),
         }
-    except Exception as e:
-        logger.error(f'refresh_op_sets failed: {e}')
-        return {'success': False, 'message': str(e), 'sets': []}
+    except Exception:
+        logger.exception('refresh_op_sets failed')
+        return {'success': False, 'message': 'Failed to refresh sets', 'sets': []}
 
 
 # ──────────────────────────────────────────────

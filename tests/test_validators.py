@@ -222,7 +222,6 @@ class TestValidateJsonDecorator:
         @app.route('/test-json', methods=['POST'])
         @validate_json(TestRequestSchema)
         def test_endpoint():
-            data = getattr(LoginSchema, '__test_data__', None)
             # Use request.validated_data set by the decorator
             from flask import request
 

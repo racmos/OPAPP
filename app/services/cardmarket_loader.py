@@ -36,11 +36,12 @@ CARDMARKET_URLS = {
 class CardmarketLoader:
     """Orchestrates download, validation, and loading of Cardmarket data."""
 
-    def __init__(self):
+    def __init__(self, progress_callback=None):
         self.steps = []
         self.errors = []
         self.today = datetime.utcnow().strftime('%Y%m%d')
         self.unmatched_count = 0
+        self._progress_callback = progress_callback
 
     def run(self, urls: Optional[dict] = None) -> dict:
         """Main orchestrator. Downloads, validates, loads all 3 files.
@@ -161,15 +162,29 @@ class CardmarketLoader:
             self.errors.append(str(e))
             return self._result(False)
 
+    def _sanitize_for_log(self, value: object) -> str:
+        """Sanitize user-influenced values before logging to prevent log injection."""
+        return str(value).replace('\r', '').replace('\n', '')
+
     def _download_json(self, url: str, file_type: str) -> Optional[dict]:
         """Download JSON file from URL."""
+        # SSRF protection: only allow Cardmarket S3 domain
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        if parsed.netloc != 'downloads.s3.cardmarket.com':
+            safe_netloc = (parsed.netloc or '').replace('\r', '').replace('\n', '')
+            logger.error('Blocked download from unauthorized host: %s', safe_netloc)
+            self.errors.append(f'Download blocked for {file_type}: unauthorized host')
+            return None
         try:
             resp = requests.get(url, timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            logger.error(f'Failed to download {file_type} from {url}: {e}')
-            self.errors.append(f'Download failed for {file_type}: {e!s}')
+            safe_url = self._sanitize_for_log(url)
+            logger.error('Failed to download %s from %s: %s', file_type, safe_url, e)
+            self.errors.append(f'Download failed for {file_type}')
             return None
 
     def _compute_hash(self, data: dict) -> str:
@@ -496,7 +511,10 @@ class CardmarketLoader:
 
     def _add_step(self, step: str, status: str, message: str):
         """Add a new step to the progress tracker."""
-        self.steps.append({'step': step, 'status': status, 'message': message})
+        item = {'step': step, 'status': status, 'message': message}
+        self.steps.append(item)
+        if self._progress_callback:
+            self._progress_callback(item)
 
     def _update_step(self, step: str, status: str, message: str):
         """Update the last step matching the given name."""
@@ -504,6 +522,8 @@ class CardmarketLoader:
             if s['step'] == step:
                 s['status'] = status
                 s['message'] = message
+                if self._progress_callback:
+                    self._progress_callback(s)
                 break
 
     def _result(self, success: bool) -> dict:
