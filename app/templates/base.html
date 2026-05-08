@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/onepiecetcg/static/css/style.css">
+    <link rel="stylesheet" href="/onepiecetcg/static/css/animations.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     {% block extra_css %}{% endblock %}
 </head>
@@ -61,6 +62,40 @@
             });
             event.target.classList.add('active');
         }
+
+        // Scroll-triggered reveals via IntersectionObserver
+        (function() {
+            if (!window.IntersectionObserver) return;
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('reveal--visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelectorAll('.reveal').forEach(function(el) {
+                    observer.observe(el);
+                });
+            });
+        })();
+
+        // Parallax scroll tracking for dashboard
+        (function() {
+            var heroes = document.querySelectorAll('.parallax-hero');
+            if (!heroes.length) return;
+            function updateParallax() {
+                heroes.forEach(function(hero) {
+                    var rect = hero.getBoundingClientRect();
+                    var scroll = window.scrollY - (rect.top + window.scrollY - window.innerHeight);
+                    hero.style.setProperty('--scroll', Math.max(0, scroll));
+                });
+            }
+            window.addEventListener('scroll', updateParallax, { passive: true });
+            updateParallax();
+        })();
     </script>
     {% block extra_js %}{% endblock %}
 </body>

@@ -3,9 +3,15 @@
 {% block title %}Dashboard - OP TCG Manager{% endblock %}
 
 {% block content %}
-<h1 style="text-align: center; color: var(--accent); margin-bottom: 3rem;">
-    Welcome to One Piece TCG Manager
-</h1>
+<div class="parallax-hero">
+    <div class="parallax-layer parallax-layer--deep"></div>
+    <div class="parallax-layer parallax-layer--mid"></div>
+    <div class="parallax-layer parallax-layer--near"></div>
+    <div class="parallax-hero__content">
+        <h1 class="parallax-hero__title">One Piece TCG Manager</h1>
+        <p class="parallax-hero__subtitle">Track your collection, build decks, and explore the Grand Line.</p>
+    </div>
+</div>
 
 <div class="dashboard-grid">
     <a href="{{ url_for('sets.sets') }}" class="dashboard-card">

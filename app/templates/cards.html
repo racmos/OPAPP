@@ -544,7 +544,7 @@
 <!-- Card Grid -->
 <div class="card-grid" id="cardGridView" style="{% if view == 'list' %}display:none;{% endif %}">
     {% for card in cards %}
-    <div class="card-item"
+    <div class="card-item reveal reveal--delay-{{ (loop.index0 % 8) + 1 }}"
          data-set-id="{{ card.opcar_opset_id }}"
          data-card-id="{{ card.opcar_id }}"
          data-version="{{ card.opcar_version }}"
@@ -595,7 +595,7 @@
         </thead>
         <tbody>
             {% for card in cards %}
-            <tr class="card-list-item"
+            <tr class="card-list-item reveal reveal--delay-{{ (loop.index0 % 8) + 1 }}"
                 data-set-id="{{ card.opcar_opset_id }}"
                 data-card-id="{{ card.opcar_id }}"
                 data-version="{{ card.opcar_version }}"
@@ -634,7 +634,7 @@
     </table>
 </div>
 {% else %}
-<div class="empty-state">
+<div class="empty-state reveal">
     <i class="fa-solid fa-compass"></i>
     <h3>No cards found</h3>
     <p>Try adjusting your filters or search criteria to discover new treasures.</p>
