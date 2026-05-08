@@ -173,7 +173,8 @@ class CardmarketLoader:
 
         parsed = urlparse(url)
         if parsed.netloc != 'downloads.s3.cardmarket.com':
-            logger.error('Blocked download from unauthorized host: %s', parsed.netloc)
+            safe_netloc = (parsed.netloc or '').replace('\r', '').replace('\n', '')
+            logger.error('Blocked download from unauthorized host: %s', safe_netloc)
             self.errors.append(f'Download blocked for {file_type}: unauthorized host')
             return None
         try:
