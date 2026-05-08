@@ -15,7 +15,7 @@ class OpCollection(db.Model):
     opcol_opcar_version = db.Column(db.Text, nullable=False, default='p0')
     opcol_foil = db.Column(db.Text, nullable=False, default='N')
     opcol_user = db.Column(db.String(64), nullable=False)
-    opcol_quantity = db.Column(db.Text, nullable=False)
+    opcol_quantity = db.Column(db.Integer, nullable=False)
     opcol_selling = db.Column(db.Text, default='N')
     opcol_playset = db.Column(db.Integer, nullable=True)
     opcol_sell_price = db.Column(db.Numeric, nullable=True)

@@ -1115,7 +1115,7 @@ class TestCollectionRoutes:
                 opcol_user='coluser', opcol_opset_id='OP01', opcol_opcar_id='OP01-001', opcol_opcar_version='p0'
             ).first()
             assert col is not None
-            assert col.opcol_quantity == '4'
+            assert col.opcol_quantity == 4
 
     def test_collection_add_variant_card_uses_version(self, app, client):
         """Collection rows can target a specific card version."""
@@ -1205,7 +1205,7 @@ class TestCollectionRoutes:
             col = OpCollection.query.filter_by(
                 opcol_user='merger', opcol_opset_id='OP01', opcol_opcar_id='OP01-001'
             ).first()
-            assert col.opcol_quantity == '5'
+            assert col.opcol_quantity == 5
 
     def test_collection_different_condition_creates_new_row(self, app, client):
         """Different condition creates separate collection row (no merge)."""
@@ -1263,7 +1263,7 @@ class TestCollectionRoutes:
                 opcol_opcar_id='OP01-001',
                 opcol_foil='N',
                 opcol_user='upduser',
-                opcol_quantity='1',
+                opcol_quantity=1,
             )
             db.session.add(col)
             db.session.commit()
@@ -1286,7 +1286,7 @@ class TestCollectionRoutes:
         assert data['success'] is True
         with app.app_context():
             updated = OpCollection.query.get(col_id)
-            assert updated.opcol_quantity == '10'
+            assert updated.opcol_quantity == 10
             assert updated.opcol_selling == 'Y'
             assert float(updated.opcol_sell_price) == 15.50
             assert updated.opcol_condition == 'MT'
@@ -1302,7 +1302,7 @@ class TestCollectionRoutes:
                 opcol_opcar_id='OP01-001',
                 opcol_foil='N',
                 opcol_user='deluser',
-                opcol_quantity='1',
+                opcol_quantity=1,
             )
             db.session.add(col)
             db.session.commit()

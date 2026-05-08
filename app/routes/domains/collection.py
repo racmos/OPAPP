@@ -14,14 +14,6 @@ from app.schemas.validators import CollectionAdd, validate_json
 collection_bp = Blueprint('collection', __name__, url_prefix='/onepiecetcg/collection')
 
 
-def _qty_int(raw) -> int:
-    """Convert quantity (stored as TEXT) to int safely."""
-    try:
-        return int(raw)
-    except (TypeError, ValueError) as e:
-        raise ValueError(f'Invalid quantity value: {raw!r}') from e
-
-
 def _null_safe_eq(col, val):
     """NULL-safe equality for SQLAlchemy filters."""
     if val is None:
@@ -140,7 +132,7 @@ def add_collection():
     )
 
     if existing:
-        existing.opcol_quantity = str(_qty_int(existing.opcol_quantity) + data.opcol_quantity)
+        existing.opcol_quantity = existing.opcol_quantity + data.opcol_quantity
         existing.opcol_chadat = datetime.utcnow()
         db.session.commit()
         return jsonify({'success': True, 'opcol_id': existing.opcol_id, 'merged': True})
@@ -150,7 +142,7 @@ def add_collection():
         opcol_opcar_id=data.opcol_opcar_id,
         opcol_opcar_version=data.opcol_opcar_version,
         opcol_foil=data.opcol_foil,
-        opcol_quantity=str(data.opcol_quantity),
+        opcol_quantity=data.opcol_quantity,
         opcol_selling=selling,
         opcol_sell_price=data.opcol_sell_price,
         opcol_condition=data.opcol_condition,
@@ -181,7 +173,7 @@ def update_collection():
             db.session.delete(col)
             db.session.commit()
             return jsonify({'success': True, 'deleted': True})
-        col.opcol_quantity = str(qty)
+        col.opcol_quantity = qty
 
     if 'opcol_selling' in data:
         col.opcol_selling = data['opcol_selling']
