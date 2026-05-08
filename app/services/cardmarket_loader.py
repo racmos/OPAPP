@@ -36,11 +36,12 @@ CARDMARKET_URLS = {
 class CardmarketLoader:
     """Orchestrates download, validation, and loading of Cardmarket data."""
 
-    def __init__(self):
+    def __init__(self, progress_callback=None):
         self.steps = []
         self.errors = []
         self.today = datetime.utcnow().strftime('%Y%m%d')
         self.unmatched_count = 0
+        self._progress_callback = progress_callback
 
     def run(self, urls: Optional[dict] = None) -> dict:
         """Main orchestrator. Downloads, validates, loads all 3 files.
@@ -496,7 +497,10 @@ class CardmarketLoader:
 
     def _add_step(self, step: str, status: str, message: str):
         """Add a new step to the progress tracker."""
-        self.steps.append({'step': step, 'status': status, 'message': message})
+        item = {'step': step, 'status': status, 'message': message}
+        self.steps.append(item)
+        if self._progress_callback:
+            self._progress_callback(item)
 
     def _update_step(self, step: str, status: str, message: str):
         """Update the last step matching the given name."""
@@ -504,6 +508,8 @@ class CardmarketLoader:
             if s['step'] == step:
                 s['status'] = status
                 s['message'] = message
+                if self._progress_callback:
+                    self._progress_callback(s)
                 break
 
     def _result(self, success: bool) -> dict:
