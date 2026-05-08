@@ -1,5 +1,7 @@
 """Custom exception hierarchy for the application."""
 
+from typing import Optional
+
 
 class AppBaseError(Exception):
     """Base class for all application-specific exceptions."""
@@ -12,7 +14,7 @@ class AppBaseError(Exception):
 class ValidationError(AppBaseError):
     """Raised when user input fails validation."""
 
-    def __init__(self, message: str = 'Validation failed', field: str = None, *args):
+    def __init__(self, message: str = 'Validation failed', field: Optional[str] = None, *args):
         self.field = field
         super().__init__(message, *args)
 
@@ -20,7 +22,7 @@ class ValidationError(AppBaseError):
 class ScrapingError(AppBaseError):
     """Raised when external scraping fails."""
 
-    def __init__(self, message: str = 'Scraping failed', url: str = None, *args):
+    def __init__(self, message: str = 'Scraping failed', url: Optional[str] = None, *args):
         self.url = url
         super().__init__(message, *args)
 
@@ -35,7 +37,7 @@ class DataIntegrityError(AppBaseError):
 class CardmarketError(AppBaseError):
     """Raised when Cardmarket API interactions fail."""
 
-    def __init__(self, message: str = 'Cardmarket API error', status_code: int = None, *args):
+    def __init__(self, message: str = 'Cardmarket API error', status_code: Optional[int] = None, *args):
         self.status_code = status_code
         super().__init__(message, *args)
 
@@ -43,6 +45,6 @@ class CardmarketError(AppBaseError):
 class ConfigurationError(AppBaseError):
     """Raised when required configuration is missing or invalid."""
 
-    def __init__(self, message: str = 'Configuration error', config_key: str = None, *args):
+    def __init__(self, message: str = 'Configuration error', config_key: Optional[str] = None, *args):
         self.config_key = config_key
         super().__init__(message, *args)
